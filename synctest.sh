@@ -78,21 +78,48 @@ if [ -z "$assertoor_url" ]; then
 fi
 echo "assertoor api: $assertoor_url"
 
-# extract assertoor config
+# extract assertoor config and clean it up
 echo "load assertoor config & get non validating client pairs..."
-assertoor_config=$(kurtosis files inspect "$enclave" assertoor-config assertoor-config.yaml | tail -n +2)
+assertoor_config=$(kurtosis files inspect "$enclave" assertoor-config assertoor-config.yaml | 
+    tail -n +3 | # Skip the first two lines (INFO and "File contents:")
+    sed 's/\r//g' | # Remove any carriage returns
+    sed 's/[[:cntrl:]]//g' # Remove control characters
+)
+
+echo "=== Debug: Raw assertoor config ==="
+echo "$assertoor_config"
+echo "=== Debug: End raw config ==="
+
+echo "=== Debug: Trying yq query ==="
+echo "$assertoor_config" | yq -r '.globalVars | (.clientPairNames - .validatorPairNames)[]'
+echo "=== Debug: End yq query ==="
 
 non_validating_pairs=$(
     echo "$assertoor_config" | 
-    yq ". as \$root | .globalVars.clientPairNames | filter( . as \$item | \$root.globalVars.validatorPairNames | contains([\$item]) == false ) | .[]" | 
+    yq -r '.globalVars | (.clientPairNames - .validatorPairNames)[]' 2>/dev/null |
     while IFS= read -r client ; do
-        client_parts=( $(echo $client | sed 's/-/ /g') )
-        cl_container="cl-${client_parts[0]}-${client_parts[2]}-${client_parts[1]}"
-        el_container="el-${client_parts[0]}-${client_parts[1]}-${client_parts[2]}"
-
-        echo "${client_parts[0]} $client $cl_container $el_container"
+        if [ ! -z "$client" ]; then
+            echo "=== Debug: Processing client: $client ==="
+            client_parts=( $(echo $client | tr '-' ' ') )
+            echo "=== Debug: Client parts: ${client_parts[@]} ==="
+            if [ ${#client_parts[@]} -eq 3 ]; then
+                cl_container="cl-${client_parts[0]}-${client_parts[2]}-${client_parts[1]}"
+                el_container="el-${client_parts[0]}-${client_parts[1]}-${client_parts[2]}"
+                echo "${client_parts[0]} $client $cl_container $el_container"
+            fi
+        fi
     done
 )
+
+echo "=== Debug: Final non_validating_pairs ==="
+echo "$non_validating_pairs"
+echo "=== Debug: End non_validating_pairs ==="
+
+# Add error checking before the stop section
+if [ -z "$non_validating_pairs" ]; then
+    echo "Error: No non-validating pairs found or failed to parse config"
+    exit 1
+fi
 
 # 2: stop client pairs that are not validating
 echo "stop non validating client pairs..."
