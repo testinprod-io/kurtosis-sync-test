@@ -23,9 +23,8 @@ network_params:
 additional_services:
   - dora
   - assertoor
-  - goomy_blob
-  - tx_spammer
-  - blob_spammer
+  - tx_fuzz
+  - spamoor
 snooper_enabled: true
 assertoor_params:
   run_stability_check: false
