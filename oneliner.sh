@@ -54,11 +54,11 @@ while true; do
             echo "Start Timestamp: $start_timestamp"
             echo "End Timestamp: $end_timestamp"
             mkdir -p results
-            output_file="results/${net}-${el_client}-$(date +%Y-%m-%d-%H-%M).csv"
+            output_file="results/${net}-${el_client}.csv"
             if [ ! -f "$output_file" ]; then
-              echo "DBSize;SyncDurationSeconds" > "$output_file"
+              echo "DBSize;SyncDurationSeconds;StartTimestamp;EndTimestamp" > "$output_file"
             fi
-            echo "$dbsize;$sync_duration" >> "$output_file"
+            echo "$dbsize;$sync_duration;$start_timestamp;$end_timestamp" >> "$output_file"
             echo "Data written to $output_file"
 
             echo "Cleaning Kurtosis environment..."
