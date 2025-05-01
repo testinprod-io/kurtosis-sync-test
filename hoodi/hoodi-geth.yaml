@@ -2,7 +2,6 @@ participants:
   - el_type: geth
 network_params:
   network: hoodi
-  force_snapshot_sync: true
 port_publisher:
   cl:
     enabled: true
