@@ -1,0 +1,10 @@
+participants:
+  - el_type: besu
+network_params:
+  network: sepolia
+port_publisher:
+  cl:
+    enabled: true
+    public_port_start: 33000
+persistent: true
+ethereum_metrics_exporter_enabled: true

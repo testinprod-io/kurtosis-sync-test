@@ -1,0 +1,10 @@
+participants:
+  - el_type: geth
+network_params:
+  network: mainnet
+port_publisher:
+  cl:
+    enabled: true
+    public_port_start: 33000
+persistent: true
+ethereum_metrics_exporter_enabled: true
