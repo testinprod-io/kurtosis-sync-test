@@ -1,5 +1,0 @@
-- name: Remove blobber container
-  community.docker.docker_container:
-    name: "{{ blobber_container_name }}"
-    state: absent
-  when: blobber_cleanup

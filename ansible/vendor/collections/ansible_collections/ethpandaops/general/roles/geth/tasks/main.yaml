@@ -1,7 +1,0 @@
-- name: Setup geth
-  ansible.builtin.import_tasks: setup.yaml
-  when: not geth_cleanup
-
-- name: Cleanup geth
-  ansible.builtin.import_tasks: cleanup.yaml
-  when: geth_cleanup

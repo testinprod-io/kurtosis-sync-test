@@ -1,5 +1,0 @@
-- name: Remove vector container
-  community.docker.docker_container:
-    name: "{{ vector_container_name }}"
-    state: absent
-  when: vector_cleanup

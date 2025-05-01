@@ -1,4 +1,0 @@
-- name: Remove besu container
-  community.docker.docker_container:
-    name: "{{ besu_container_name }}"
-    state: absent

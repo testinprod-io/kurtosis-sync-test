@@ -1,9 +1,0 @@
-- name: Verify
-  hosts: all
-  tasks:
-    - name: Test connection
-      ansible.builtin.ping:
-    - name: Check package
-      ansible.builtin.package:
-        name: jq
-        state: present

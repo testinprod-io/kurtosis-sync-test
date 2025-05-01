@@ -1,7 +1,0 @@
-- name: Remove erigon containers
-  community.docker.docker_container:
-    name: "{{ item }}"
-    state: absent
-  loop:
-    - "{{ erigon_container_name }}"
-    - "{{ erigon_container_name }}-init"

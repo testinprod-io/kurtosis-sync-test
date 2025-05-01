@@ -1,7 +1,0 @@
-- name: Setup erigon
-  ansible.builtin.import_tasks: setup.yaml
-  when: not erigon_cleanup
-
-- name: Cleanup erigon
-  ansible.builtin.import_tasks: cleanup.yaml
-  when: erigon_cleanup

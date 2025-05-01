@@ -1,5 +1,0 @@
-- name: Restart tx_fuzz sentry container
-  community.docker.docker_container:
-    name: "{{ tx_fuzz_container_name }}"
-    state: started
-    restart: true

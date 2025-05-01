@@ -1,7 +1,0 @@
-- name: Setup ethereum-metrics-exporter
-  ansible.builtin.import_tasks: setup.yaml
-  when: not ethereum_metrics_exporter_cleanup
-
-- name: Cleanup ethereum-metrics-exporter
-  ansible.builtin.import_tasks: cleanup.yaml
-  when: ethereum_metrics_exporter_cleanup

@@ -1,4 +1,0 @@
-- name: Remove logsprout container
-  community.docker.docker_container:
-    name: "{{ logsprout_container_name }}"
-    state: absent

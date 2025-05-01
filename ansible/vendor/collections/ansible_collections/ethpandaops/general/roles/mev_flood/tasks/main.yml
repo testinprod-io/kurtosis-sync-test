@@ -1,8 +1,0 @@
----
-# tasks file for mev_flood
-- name: Setup mev_flood
-  ansible.builtin.import_tasks: setup.yaml
-  when: not mev_flood_cleanup
-
-- name: Cleanup mev_flood
-  ansible.builtin.import_tasks: cleanup.yaml

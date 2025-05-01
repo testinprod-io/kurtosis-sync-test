@@ -1,7 +1,0 @@
-- name: Setup ethereumjs
-  ansible.builtin.import_tasks: setup.yaml
-  when: not ethereumjs_cleanup
-
-- name: Cleanup ethereumjs
-  ansible.builtin.import_tasks: cleanup.yaml
-  when: ethereumjs_cleanup

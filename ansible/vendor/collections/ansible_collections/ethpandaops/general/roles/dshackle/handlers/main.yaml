@@ -1,5 +1,0 @@
-- name: Restart dshackle container
-  community.docker.docker_container:
-    name: "{{ dshackle_container_name }}"
-    state: started
-    restart: true

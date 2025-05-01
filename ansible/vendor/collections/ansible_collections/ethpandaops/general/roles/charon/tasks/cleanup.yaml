@@ -1,5 +1,0 @@
-- name: Remove charon container
-  community.docker.docker_container:
-    name: "{{ charon_container_name }}"
-    state: absent
-    when: charon_cleanup
