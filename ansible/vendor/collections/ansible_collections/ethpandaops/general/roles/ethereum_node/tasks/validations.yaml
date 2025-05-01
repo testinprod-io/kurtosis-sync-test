@@ -1,0 +1,20 @@
+- name: Check defined execution client
+  ansible.builtin.assert:
+    that:
+      - ethereum_node_el in ethereum_node_supported_el
+    success_msg: "{{ ethereum_node_el }} is a supported client"
+    fail_msg: >
+      ethereum_node_el = '{{ ethereum_node_el }}' is invalid. You can choose between: '{{ ethereum_node_supported_el }}'
+
+- name: Check defined consensus client
+  ansible.builtin.assert:
+    that:
+      - ethereum_node_cl in ethereum_node_supported_cl
+    success_msg: "{{ ethereum_node_cl }} is a supported client"
+    fail_msg: >
+      ethereum_node_el = '{{ ethereum_node_cl }}' is invalid. You can choose between: '{{ ethereum_node_supported_cl }}'
+
+- name: Check if consensus client supports blobber configuration
+  ansible.builtin.fail:
+    msg: "Error: The blobber tool currently doesn't support nimbus, teku or grandine"
+  when: ethereum_node_blobber_enabled and (ethereum_node_cl == 'nimbus' or ethereum_node_cl == 'teku' or ethereum_node_cl == 'grandine')

@@ -1,0 +1,34 @@
+- import_playbook: ethpandaops.general.bootstrap_server
+  vars:
+    target: "all:!localhost"
+  tags: [init-server, bootstrap]
+
+- hosts: all, !localhost
+  serial: "{{ batch_count | default('100%') }}"
+  become: true
+  roles:
+    - role: robertdebock.fail2ban
+      tags: [init-server, fail2ban]
+    - role: geerlingguy.docker
+      tags: [init-server, docker]
+    - role: geerlingguy.pip
+      pip_install_packages:
+        - name: docker
+      tags: [init-server, pip]
+    - role: ethpandaops.general.docker_cleanup
+      tags: [init-server, docker_cleanup]
+    - role: ethpandaops.general.docker_network
+      tags: [init-server, docker_network]
+    - role: ethpandaops.general.node_exporter
+      tags: [init-server, node_exporter]
+    - role: ethpandaops.general.prometheus
+      tags: [init-server, prometheus]
+    - role: ethpandaops.general.vector
+      tags: [init-server, vector]
+    - role: jnv.unattended-upgrades
+      when: unattended_update_days is defined
+      vars:
+        unattended_automatic_reboot: true
+        unattended_package_blacklist: [docker-ce, docker-ce-cli]
+      tags: [init-server, unattended-upgrades]
+

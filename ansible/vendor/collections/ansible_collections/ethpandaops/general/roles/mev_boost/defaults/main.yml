@@ -1,0 +1,27 @@
+mev_boost_user: mev_boost
+
+mev_boost_cleanup: false # when set to "true" it will remove the container(s)
+mev_boost_docker_network_name: shared
+mev_boost_docker_networks:
+  - name: "{{ mev_boost_docker_network_name }}"
+################################################################################
+##
+## mev_boost container configuration
+##
+################################################################################
+mev_boost_container_name: mev-boost
+mev_boost_container_image: flashbots/mev-boost:1.5.0
+mev_boost_container_env: {}
+mev_boost_server_port: 18550
+mev_boost_container_ports:
+  - "127.0.0.1:{{ mev_boost_server_port }}:{{ mev_boost_server_port }}"
+mev_boost_container_stop_timeout: "300"
+mev_boost_container_networks: "{{ mev_boost_docker_networks }}"
+mev_boost_container_volumes: []
+mev_boost_container_command:
+  - -addr=0.0.0.0:{{ mev_boost_server_port }}
+  - -sepolia
+  - -relay-check
+  - -relays=https://0x845bd072b7cd566f02faeb0a4033ce9399e42839ced64e8b2adcfc859ed1e8e1a5a293336a49feac6d9a5edb779be53a@boost-relay-sepolia.flashbots.net
+
+mev_boost_container_command_extra_args: []

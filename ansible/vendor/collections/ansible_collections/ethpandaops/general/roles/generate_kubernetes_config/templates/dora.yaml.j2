@@ -1,0 +1,88 @@
+# {{ ansible_managed }}
+
+dora:
+  fullnameOverride: dora
+  image:
+    repository: {{ default_tooling_images.dora.split(':') | first }}
+    tag: {{ default_tooling_images.dora.split(':') | last }}
+    pullPolicy: {% if "latest" in (default_tooling_images.dora.split(':') | last) %}Always{% else %}IfNotPresent{% endif %}
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  ingress:
+    enabled: true
+    className: ingress-nginx-public
+    hosts:
+      - host: dora.{{ network_subdomain }}
+        paths:
+          - path: /
+            pathType: Prefix
+
+  name: {{ ethereum_network_name }}
+  configPath: "https://config.{{ network_subdomain }}/cl/config.yaml"
+  validatorNamesInventory: "https://config.{{ network_subdomain }}/api/v1/nodes/validator-ranges"
+  proxyCount: 2
+  extraEnv:
+    - name: FRONTEND_PPROF
+      value: "true"
+    - name: FRONTEND_SHOW_SENSITIVE_PEER_INFOS
+      value: "true"
+{% if 'peerdas' in ethereum_network_name %}
+    - name: FRONTEND_SHOW_PEER_DAS_INFOS
+      value: "true"
+{% endif %}
+{% if gen_kubernetes_config_dora_frontend_explorer_link %}
+    - name: FRONTEND_ETH_EXPLORER_LINK
+      value: "{{ gen_kubernetes_config_dora_frontend_explorer_link }}"
+{% endif %}
+{% if gen_kubernetes_config_dora_frontend_public_rpc %}
+    - name: FRONTEND_PUBLIC_RPC_URL
+      value: "{{ gen_kubernetes_config_dora_frontend_public_rpc }}"
+{% endif %}
+{% if gen_kubernetes_config_dora_frontend_rainbowkit_id %}
+    - name: FRONTEND_RAINBOWKIT_PROJECT_ID
+      value: "{{ gen_kubernetes_config_dora_frontend_rainbowkit_id }}"
+{% endif %}
+{% if gen_kubernetes_config_dora_frontend_with_submit_deposits %}
+    - name: FRONTEND_SHOW_SUBMIT_DEPOSIT
+      value: "true"
+{% endif %}
+{% if gen_kubernetes_config_dora_frontend_with_submit_el_requests %}
+    - name: FRONTEND_SHOW_SUBMIT_EL_REQUESTS
+      value: "true"
+{% endif %}
+  postgresql:
+    name: "dora-postgresql"
+    fullnameOverride: "dora-postgresql"
+
+  endpoints:
+  # Rpc
+  - url: {{ default_cl_endpoint }}
+    name: rpc-{{ gen_kubernetes_config_ethereum_node_name }}
+    archive: true
+    priority: 1
+{% for host in (groups['ethereum_node'] + groups['bootnode']) | sort %}
+  - url: https://<path:/secrets/services/services.enc.yaml#ethereum | jsonPath {.testnets.{{ devnet_name }}-devnets.node_ingress.combined}>@bn.{{ hostvars[host]['inventory_hostname'] }}.{{ network_subdomain }}
+    name: {{ hostvars[host]['inventory_hostname'] }}
+    priority: -1
+{% if 'lighthouse' in hostvars[host]['inventory_hostname'] %}
+    archive: true
+{% endif %}
+{% endfor %}
+  executionEndpoints:
+  # Rpc
+  - url: {{ default_el_endpoint }}
+    name: rpc-{{ gen_kubernetes_config_ethereum_node_name }}
+    archive: true
+    priority: 1
+{% for host in (groups['ethereum_node'] + groups['bootnode']) | sort %}
+  - url: https://<path:/secrets/services/services.enc.yaml#ethereum | jsonPath {.testnets.{{ devnet_name }}-devnets.node_ingress.combined}>@rpc.{{ hostvars[host]['inventory_hostname'] }}.{{ network_subdomain }}
+    name: {{ hostvars[host]['inventory_hostname'] }}
+    priority: -1
+    archive: false
+{% endfor %}

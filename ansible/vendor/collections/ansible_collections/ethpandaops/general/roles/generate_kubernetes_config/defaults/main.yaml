@@ -1,0 +1,169 @@
+devnet_name: 'template' # noqa var-naming[no-role-prefix]
+
+gen_kubernetes_config_default_output_dir: ../kubernetes/{{ ethereum_network_name | replace(devnet_name + "-", '') }} # noqa var-naming[no-role-prefix]
+
+cl_config_path: ../network-configs/{{ ethereum_network_name | replace(devnet_name + "-", '') }}/metadata/config.yaml # noqa var-naming[no-role-prefix]
+
+default_cl_endpoint: >- # noqa var-naming[no-role-prefix]
+  http://{{ gen_kubernetes_config_ethereum_node.cl + '-' + gen_kubernetes_config_ethereum_node.el + '-' +
+  gen_kubernetes_config_ethereum_node.value + ':' + ethereum_node_cl_ports_http_beacon | string }}
+default_el_endpoint: >- # noqa var-naming[no-role-prefix]
+  http://{{ gen_kubernetes_config_ethereum_node.el + '-' + gen_kubernetes_config_ethereum_node.cl + '-' +
+  gen_kubernetes_config_ethereum_node.value + ':' + ethereum_node_el_ports_http_rpc | string }}
+default_el_ws_endpoint: >- # noqa var-naming[no-role-prefix]
+  ws://{{ gen_kubernetes_config_ethereum_node.el + '-' + gen_kubernetes_config_ethereum_node.cl + '-' +
+  gen_kubernetes_config_ethereum_node.value + ':' + ethereum_node_el_ports_ws_rpc | string }}
+default_el_auth_endpoint: >- # noqa var-naming[no-role-prefix]
+  http://{{ gen_kubernetes_config_ethereum_node.el + '-' + gen_kubernetes_config_ethereum_node.cl + '-' +
+  gen_kubernetes_config_ethereum_node.value + ':' + ethereum_node_el_ports_engine | string }}
+
+gen_kubernetes_config_ethereum_node: # noqa var-naming[no-role-prefix]
+  el: geth
+  cl: teku
+  value: "001"
+
+gen_kubernetes_domain: "{{ domain | default('ethpandaops.io') }}" # noqa var-naming[no-role-prefix]
+
+gen_kubernetes_config_helm_repositories: # noqa var-naming[no-role-prefix]
+  - name: ethereum-helm-charts
+    url: https://ethpandaops.github.io/ethereum-helm-charts
+  - name: blobscan-helm-charts
+    url: https://blobscan.github.io/blobscan-helm-charts/
+  - name: blockscout-helm-charts
+    url: https://blockscout.github.io/helm-charts
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+  - name: ethpandaops-general-helm-charts
+    url: https://ethpandaops.github.io/general-helm-charts
+
+gen_kubernetes_config_ethereum_node_name: >- # noqa var-naming[no-role-prefix] yaml[line-length]
+  {{ gen_kubernetes_config_ethereum_node.cl }}-{{ gen_kubernetes_config_ethereum_node.el }}-{{ gen_kubernetes_config_ethereum_node.value }}
+
+gen_kubernetes_config_dora_frontend_explorer_link: "https://explorer.{{ network_subdomain }}" # noqa var-naming[no-role-prefix]
+gen_kubernetes_config_dora_frontend_rainbowkit_id: "" # noqa var-naming[no-role-prefix]
+gen_kubernetes_config_dora_frontend_public_rpc: "https://rpc.{{ network_subdomain }}" # noqa var-naming[no-role-prefix]
+gen_kubernetes_config_dora_frontend_with_submit_deposits: true # noqa var-naming[no-role-prefix]
+gen_kubernetes_config_dora_frontend_with_submit_el_requests: true # noqa var-naming[no-role-prefix]
+
+gen_kubernetes_config_helm_charts: # noqa var-naming[no-role-prefix]
+  config:
+    valuesTemplatePath: templates/config.yaml.j2
+  # beacon-metrics-gazer:
+  #   valuesTemplatePath: templates/beacon-metrics-gazer.yaml.j2
+  #   dependencies:
+  #     - name: beacon-metrics-gazer
+  #       repository: https://ethpandaops.github.io/ethereum-helm-charts
+  #       version: 0.1.3
+  # blobscan:
+  #   valuesTemplatePath: templates/blobscan.yaml.j2
+  #   dependencies:
+  #     - name: blobscan
+  #       repository: https://blobscan.github.io/blobscan-helm-charts/
+  #       version: 0.2.12
+  #     - name: blobscan-api
+  #       repository: https://blobscan.github.io/blobscan-helm-charts/
+  #       version: 0.2.8
+  #     - name: blobscan-indexer
+  #       repository: https://blobscan.github.io/blobscan-helm-charts/
+  #       version: 0.2.9
+  blockscout:
+    valuesTemplatePath: templates/blockscout.yaml.j2
+    dependencies:
+      - name: blockscout-stack
+        repository: https://blockscout.github.io/helm-charts
+        version: 2.0.0
+      - name: postgresql
+        repository: https://charts.bitnami.com/bitnami
+        version: "14.x.x"
+        condition: postgresql.enabled
+  checkpointz:
+    valuesTemplatePath: templates/checkpointz.yaml.j2
+    dependencies:
+      - name: checkpointz
+        repository: https://ethpandaops.github.io/ethereum-helm-charts
+        version: 0.1.3
+  dugtrio:
+    valuesTemplatePath: templates/dugtrio.yaml.j2
+    dependencies:
+      - name: dugtrio
+        repository: https://ethpandaops.github.io/ethereum-helm-charts
+        version: 0.0.6
+  ethstats:
+    valuesTemplatePath: templates/ethstats.yaml.j2
+    dependencies:
+      - name: ethstats
+        repository: https://ethpandaops.github.io/ethereum-helm-charts
+        version: 0.1.4
+  faucet:
+    valuesTemplatePath: templates/powfaucet.yaml.j2
+    dependencies:
+      - name: powfaucet
+        repository: https://ethpandaops.github.io/ethereum-helm-charts
+        version: 0.0.4
+  forkmon:
+    valuesTemplatePath: templates/forkmon.yaml.j2
+    dependencies:
+      - name: forkmon
+        repository: https://ethpandaops.github.io/ethereum-helm-charts
+        version: 0.1.5
+  dora:
+    valuesTemplatePath: templates/dora.yaml.j2
+    dependencies:
+      - name: dora
+        repository: https://ethpandaops.github.io/ethereum-helm-charts
+        version: 0.0.7
+  forky:
+    valuesTemplatePath: templates/forky.yaml.j2
+    dependencies:
+      - name: forky
+        repository: https://ethpandaops.github.io/ethereum-helm-charts
+        version: 0.2.0
+  homepage:
+    valuesTemplatePath: templates/testnet-homepage.yaml.j2
+    dependencies:
+      - name: testnet-homepage
+        repository: https://ethpandaops.github.io/ethereum-helm-charts
+        version: 0.2.3
+  # rpc:
+  #   valuesTemplatePath: templates/rpc-proxy.yaml.j2
+  #   dependencies:
+  #     - name: rpc-proxy
+  #       repository: https://ethpandaops.github.io/ethereum-helm-charts
+  #       version: 0.1.2
+  assertoor:
+    valuesTemplatePath: templates/assertoor.yaml.j2
+    dependencies:
+      - name: assertoor
+        repository: https://ethpandaops.github.io/ethereum-helm-charts
+        version: 1.0.0
+  tracoor:
+    valuesTemplatePath: templates/tracoor.yaml.j2
+    dependencies:
+      - name: tracoor-single
+        repository: https://ethpandaops.github.io/ethereum-helm-charts
+        version: 0.0.5
+  "{{ gen_kubernetes_config_ethereum_node_name }}":
+    valuesTemplatePath: templates/ethereum-node.yaml.j2
+    dependencies:
+      - name: ethereum-node
+        repository: https://ethpandaops.github.io/ethereum-helm-charts
+        version: 0.0.27
+        alias: "{{ gen_kubernetes_config_ethereum_node_name }}"
+  erpc:
+    valuesTemplatePath: templates/erpc.yaml.j2
+    dependencies:
+      - name: erpc
+        repository: https://ethpandaops.github.io/ethereum-helm-charts
+        version: 0.0.2
+  spamoor:
+    valuesTemplatePath: templates/spamoor.yaml.j2
+    dependencies:
+      - name: spamoor
+        repository: https://ethpandaops.github.io/ethereum-helm-charts
+        version: 0.0.1
+  xatu-cannon:
+    valuesTemplatePath: templates/xatu-cannon.yaml.j2
+    dependencies:
+      - name: xatu-cannon
+        repository: https://ethpandaops.github.io/ethereum-helm-charts
+        version: 0.2.2

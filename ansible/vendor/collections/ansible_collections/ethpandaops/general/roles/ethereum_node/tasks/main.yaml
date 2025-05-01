@@ -1,0 +1,58 @@
+- name: Validate inputs
+  ansible.builtin.import_tasks: validations.yaml
+
+- name: Setup docker network
+  ansible.builtin.include_role:
+    name: ethpandaops.general.docker_network
+  vars:
+    docker_network_name: "{{ ethereum_node_docker_network_name }}"
+
+- name: Cleanup clients that shouldn't be running
+  ansible.builtin.import_tasks: cleanup.yaml
+  when: not ethereum_node_skip_cleanup
+
+- name: Setup external block builder
+  ansible.builtin.import_tasks: addons/external_block_builder.yaml
+
+- name: Setup mev_mock_relay_builder
+  ansible.builtin.include_role:
+    name: ethpandaops.general.mev_mock_relay_builder
+  vars:
+    mev_mock_relay_builder_container_networks: "{{ ethereum_node_docker_networks }}"
+    mev_mock_relay_builder_beacon_uri: "{{ ethereum_node_cl_beacon_endpoint }}"
+    mev_mock_relay_builder_el_uri: >-
+      {{ ethereum_node_json_rpc_snooper_engine_enabled | ternary(ethereum_node_el_engine_snooper_endpoint, ethereum_node_el_engine_endpoint) }}
+  when: ethereum_node_mev_mock_relay_builder_enabled
+
+- name: Setup execution client
+  ansible.builtin.import_tasks: setup_el.yaml
+  when: ethereum_node_el_enabled
+
+- name: Configure JSON RPC Snooper
+  ansible.builtin.import_tasks: addons/snooper.yaml
+
+- name: Setup consensus client
+  ansible.builtin.import_tasks: setup_cl.yaml
+  when: ethereum_node_cl_enabled
+
+- name: Collect and set facts about the nodes
+  ansible.builtin.include_role:
+    name: ethpandaops.general.ethereum_node_fact_discovery
+    apply:
+      tags:
+        - ethereum_node_fact_discovery
+  tags:
+    - ethereum_node_fact_discovery
+  vars:
+    ethereum_node_fact_discovery_el: "{{ ethereum_node_el_enabled }}"
+    ethereum_node_fact_discovery_cl: "{{ ethereum_node_cl_enabled }}"
+  when: ethereum_node_fact_discovery_enabled
+
+- name: Configure metrics exporter
+  ansible.builtin.import_tasks: addons/metrics_exporter.yaml
+
+- name: Configure xatu sentry
+  ansible.builtin.import_tasks: addons/xatu_sentry.yaml
+
+- name: Configure blobber
+  ansible.builtin.import_tasks: addons/blobber.yaml

@@ -1,0 +1,13 @@
+{
+    "include_symlinks": false,
+    "prefixes": [
+        "docs/docsite/",
+        "plugins/",
+        "roles/"
+    ],
+    "output": "path-line-column-message",
+    "requirements": [
+        "ansible-core<2.16",
+        "antsibull-docs"
+    ]
+}
