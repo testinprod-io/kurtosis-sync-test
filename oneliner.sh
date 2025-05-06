@@ -1,7 +1,7 @@
 #!/bin/bash
 
 network=("hoodi" "sepolia" "mainnet")
-el=("geth" "reth" "nethermind" "besu" "erigon")
+el=("nethermind" "reth" "geth" "besu" "erigon")
 branch="main"
 while true; do
   for el_client in "${el[@]}"; do
