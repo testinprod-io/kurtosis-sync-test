@@ -2,16 +2,16 @@
 
 network=("hoodi" "sepolia" "mainnet")
 el=("geth" "reth" "nethermind" "besu" "erigon")
-
+branch="main"
 while true; do
   for el_client in "${el[@]}"; do
     for net in "${network[@]}"; do
       start_timestamp=$(date +%s)
       echo "Starting Kurtosis run for ${net}-${el_client} at $(date)"
-      kurtosis run github.com/ethpandaops/ethereum-package --args-file "${net}/${net}-${el_client}.yaml" --enclave "${net}-${el_client}" --verbosity detailed --image-download always
-
+      kurtosis run github.com/ethpandaops/ethereum-package@${branch} --args-file "${net}/${net}-${el_client}.yaml" --enclave "${net}-${el_client}" --verbosity detailed --image-download always
+      http_target=$(kurtosis port print ${net}-${el_client} cl-1-lighthouse-${el_client} http)
       while true; do
-        sync_status_json=$(curl --max-time 10 -s localhost:33001/eth/v1/node/syncing)
+        sync_status_json=$(curl --max-time 10 -s ${http_target}/eth/v1/node/syncing)
         if [ $? -ne 0 ]; then
           echo "Failed to curl CL syncing endpoint for ${net}-${el_client}. Retrying in 10s..."
           sleep 10

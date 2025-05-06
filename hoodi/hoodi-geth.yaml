@@ -3,6 +3,10 @@ participants:
 network_params:
   network: hoodi
 port_publisher:
+  nat_exit_ip: 65.21.238.80
+  el:
+    enabled: true
+    public_port_start: 32000
   cl:
     enabled: true
     public_port_start: 33000
