@@ -31,4 +31,5 @@
         unattended_automatic_reboot: true
         unattended_package_blacklist: [docker-ce, docker-ce-cli]
       tags: [init-server, unattended-upgrades]
-
+    - role: ethpandaops.general.kurtosis
+      tags: [init-server, kurtosis]

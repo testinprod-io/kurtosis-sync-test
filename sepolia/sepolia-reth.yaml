@@ -1,5 +1,6 @@
 participants:
   - el_type: reth
+    el_extra_params: ["--full"]
 network_params:
   network: sepolia
 port_publisher:
