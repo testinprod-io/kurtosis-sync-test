@@ -29,7 +29,7 @@ while true; do
         is_optimistic=$(echo "$sync_status_json" | jq -r '.data.is_optimistic')
 
         echo "Checking sync status for ${net}-${el_client} at $(date): is_syncing=$is_syncing, is_optimistic=$is_optimistic"
-        sleep 10
+        sleep 30
         if [ "$is_syncing" = "true" ]; then
             echo "CL (${net}-${el_client}) is Syncing"
         elif [ "$is_optimistic" = "true" ]; then
