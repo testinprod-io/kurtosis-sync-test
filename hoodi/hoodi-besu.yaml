@@ -1,5 +1,6 @@
 participants:
   - el_type: besu
+    cl_image: ethpandaops/lighthouse:pawanjay176-default-engine-state
 network_params:
   network: hoodi
 port_publisher:

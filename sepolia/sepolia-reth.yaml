@@ -1,6 +1,7 @@
 participants:
   - el_type: reth
     el_extra_params: ["--full"]
+    cl_image: ethpandaops/lighthouse:pawanjay176-default-engine-state
 network_params:
   network: sepolia
 port_publisher:
