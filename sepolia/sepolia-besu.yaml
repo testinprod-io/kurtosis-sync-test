@@ -1,14 +1,21 @@
 participants:
   - el_type: besu
+    cl_type: prysm
 network_params:
   network: sepolia
 port_publisher:
-  nat_exit_ip: 65.21.238.80
+  nat_exit_ip: 212.99.218.66
   el:
     enabled: true
     public_port_start: 32000
   cl:
     enabled: true
-    public_port_start: 33000
+    public_port_start: 32005
+  other:
+    enabled: true
+    public_port_start: 32015
 persistent: true
 ethereum_metrics_exporter_enabled: true
+docker_cache_params:
+  enabled: true
+  url: "docker.ethquokkaops.io"
