@@ -1,6 +1,5 @@
 participants:
   - el_type: nethermind
-    cl_type: prysm
 network_params:
   network: sepolia
 port_publisher:

@@ -1,6 +1,5 @@
 participants:
   - el_type: besu
-    cl_type: prysm
 network_params:
   network: sepolia
 port_publisher:

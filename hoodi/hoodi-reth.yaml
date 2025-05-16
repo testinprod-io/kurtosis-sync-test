@@ -1,7 +1,6 @@
 participants:
   - el_type: reth
     el_extra_params: ["--full"]
-    cl_type: prysm
 network_params:
   network: hoodi
 port_publisher:

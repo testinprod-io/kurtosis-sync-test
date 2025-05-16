@@ -9,7 +9,7 @@ while true; do
       start_timestamp=$(date +%s)
       echo "Starting Kurtosis run for ${net}-${el_client} at $(date)"
       kurtosis run github.com/ethpandaops/ethereum-package@${branch} --args-file "${net}/${net}-${el_client}.yaml" --enclave "${net}-${el_client}" --verbosity detailed --image-download always
-      http_target=$(kurtosis port print ${net}-${el_client} cl-1-prysm-${el_client} http)
+      http_target=$(kurtosis port print ${net}-${el_client} cl-1-lighthouse-${el_client} http)
       while true; do
         sync_status_json=$(curl --max-time 10 -s ${http_target}/eth/v1/node/syncing)
         if [ $? -ne 0 ]; then
@@ -29,7 +29,6 @@ while true; do
         is_optimistic=$(echo "$sync_status_json" | jq -r '.data.is_optimistic')
 
         echo "Checking sync status for ${net}-${el_client} at $(date): is_syncing=$is_syncing, is_optimistic=$is_optimistic"
-        sleep 30
         if [ "$is_syncing" = "true" ]; then
             echo "CL (${net}-${el_client}) is Syncing"
         elif [ "$is_optimistic" = "true" ]; then
@@ -38,7 +37,7 @@ while true; do
             end_timestamp=$(date +%s)
             echo "CL (${net}-${el_client}) Synced at $(date)"
 
-            volume_name_pattern="data-el-1-${el_client}-prysm"
+            volume_name_pattern="data-el-1-${el_client}-lighthouse"
             dbsize="N/A"
             dbsize_line=$(docker system df -v | grep "$volume_name_pattern")
 

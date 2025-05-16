@@ -1,6 +1,5 @@
 participants:
   - el_type: geth
-    cl_type: prysm
 network_params:
   network: hoodi
 port_publisher:
