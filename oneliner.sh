@@ -61,7 +61,7 @@ while true; do
             fi
             echo "$dbsize;$sync_duration;$start_timestamp;$end_timestamp" >> "$output_file"
             echo "Data written to $output_file"
-
+            sleep 30 # sleep to allow prometheus to scrape metrics
             echo "Cleaning Kurtosis environment..."
             kurtosis clean -a
             if [ $? -ne 0 ]; then
