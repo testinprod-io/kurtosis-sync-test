@@ -1,6 +1,6 @@
 participants:
   - el_type: nethermind
-    cl_type: lodestar
+    cl_type: teku
 network_params:
   network: mainnet
 port_publisher:
@@ -14,8 +14,13 @@ port_publisher:
   other:
     enabled: true
     public_port_start: 32015
+  additional_services:
+    enabled: true
+    public_port_start: 32020
 persistent: true
 ethereum_metrics_exporter_enabled: true
 docker_cache_params:
   enabled: true
   url: "docker.ethquokkaops.io"
+additional_services:
+  - prometheus

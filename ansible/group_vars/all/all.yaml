@@ -16,6 +16,8 @@ bootstrap_default_user_authorized_keys_github: >
 prometheus_remote_push_url: https://victoriametrics-public.analytics.production.platform.ethpandaops.io/insert/1/prometheus/api/v1/write
 prometheus_remote_write_username: "{{ secret_prometheus_remote_write.username }}"
 prometheus_remote_write_password: "{{ secret_prometheus_remote_write.password }}"
+prometheus_container_name: "prometheus_exporter"
+prometheus_container_image: "prom/prometheus:latest"
 prometheus_config: |
   global:
     scrape_interval: 12s
@@ -24,10 +26,6 @@ prometheus_config: |
     external_labels:
       instance: "kurtosis-sync-test"
       ip_address: "{{ ansible_host }}"
-      network: "mainnet,sepolia,hoodi"
-      testnet: "mainnet,sepolia,hoodi"
-      execution_client: "geth,erigon,nethermind,besu,reth"
-      consensus_client: "lighthouse"
   remote_write:
     - queue_config:
         batch_send_deadline: 5s
@@ -53,27 +51,15 @@ prometheus_config: |
         - targets: ["172.17.0.1:9100"]
           labels:
             instance: "kurtosis-sync-test"
-    - job_name: "exporter"
-      metrics_path: "/metrics"
+    - job_name: 'federate'
+      scrape_interval: 60s
+      honor_labels: true
+      metrics_path: '/federate'
+
+      params:
+        'match[]':
+          - '{__name__=~".+"}'   # Regex to match all metrics
+
       static_configs:
-        - targets: ["172.17.0.1:32015"]
-          labels:
-            instance: "kurtosis-sync-test"
-    - job_name: "consensus_node"
-      metrics_path: "/metrics"
-      static_configs:
-        - targets: ["172.17.0.1:32007"]
-          labels:
-            instance: "kurtosis-sync-test"
-    - job_name: "execution_debug"
-      metrics_path: "/debug/metrics/prometheus"
-      static_configs:
-        - targets: ["172.17.0.1:32002"]
-          labels:
-            instance: "kurtosis-sync-test"
-    - job_name: "execution_metrics"
-      metrics_path: "/metrics"
-      static_configs:
-        - targets: ["172.17.0.1:32002"]
-          labels:
-            instance: "kurtosis-sync-test"
+        - targets:
+            - '172.17.0.1:32020'
