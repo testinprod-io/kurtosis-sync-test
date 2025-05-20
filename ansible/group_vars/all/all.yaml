@@ -56,24 +56,24 @@ prometheus_config: |
     - job_name: "exporter"
       metrics_path: "/metrics"
       static_configs:
-        - targets: ["localhost:32015"]
+        - targets: ["172.17.0.1:32015"]
           labels:
             instance: "kurtosis-sync-test"
     - job_name: "consensus_node"
       metrics_path: "/metrics"
       static_configs:
-        - targets: ["localhost:32007"]
+        - targets: ["172.17.0.1:32007"]
           labels:
             instance: "kurtosis-sync-test"
     - job_name: "execution_debug"
       metrics_path: "/debug/metrics/prometheus"
       static_configs:
-        - targets: ["localhost:32002"]
+        - targets: ["172.17.0.1:32002"]
           labels:
             instance: "kurtosis-sync-test"
     - job_name: "execution_metrics"
       metrics_path: "/metrics"
       static_configs:
-        - targets: ["localhost:32002"]
+        - targets: ["172.17.0.1:32002"]
           labels:
             instance: "kurtosis-sync-test"
