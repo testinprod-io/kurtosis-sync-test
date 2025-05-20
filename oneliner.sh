@@ -3,7 +3,7 @@
 network=("hoodi" "sepolia" "mainnet")
 el=("nethermind" "reth" "geth" "besu" "erigon")
 cl=("teku")
-branch="bbusa/add-labels"
+branch="main"
 kurtosis clean -a
 while true; do
   for el_client in "${el[@]}"; do
