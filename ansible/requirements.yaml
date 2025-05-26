@@ -1,0 +1,22 @@
+roles:
+  - src: jnv.unattended-upgrades
+    version: v1.7.0
+  - name: gantsign.oh-my-zsh
+    version: "2.4.0"
+  - name: geerlingguy.docker
+    version: "6.0.3"
+  - name: geerlingguy.firewall
+    version: "2.5.0"
+  - src: geerlingguy.pip
+    version: "2.2.0"
+  - name: robertdebock.fail2ban
+    version: "5.0.3"
+  - src: nickhammond.logrotate
+    version: 91d570f68c44261d2051a99a2b3c7d736306bf0d
+collections:
+  - name: ansible.posix
+  - name: community.sops
+    version: 1.6.0
+  - name: ethpandaops.general
+    source: https://github.com/ethpandaops/ansible-collection-general.git,master
+    type: git

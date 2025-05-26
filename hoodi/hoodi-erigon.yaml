@@ -1,0 +1,27 @@
+participants:
+  - el_type: erigon
+    el_extra_params: ["--prune.mode=full"]
+    cl_type: teku
+network_params:
+  network: hoodi
+port_publisher:
+  nat_exit_ip: 212.99.218.67
+  el:
+    enabled: true
+    public_port_start: 32000
+  cl:
+    enabled: true
+    public_port_start: 32005
+  other:
+    enabled: true
+    public_port_start: 32015
+  additional_services:
+    enabled: true
+    public_port_start: 32020
+persistent: true
+ethereum_metrics_exporter_enabled: true
+docker_cache_params:
+  enabled: true
+  url: "docker.ethquokkaops.io"
+additional_services:
+  - prometheus

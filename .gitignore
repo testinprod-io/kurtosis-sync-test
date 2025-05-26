@@ -1,0 +1,4 @@
+results/*
+ansible/vendor/*
+ansible/tmp/*
+/tmp/*
