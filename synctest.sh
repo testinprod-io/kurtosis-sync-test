@@ -245,16 +245,18 @@ do
         echo -n "+"
     else
         echo ""
-        echo -n "sync test complete! status:"
-        if [ "$test_status" == "success" ]; then
-            echo "${GREEN}success${NC}"
-        else
-            echo "${RED}$test_status${NC}"
-        fi
-
+        echo "sync test results:"
         echo ""
         get_tasks_status "$test_data"
-        break
+
+        echo "sync test complete! status:"
+        if [ "$test_status" == "success" ]; then
+            echo -e "${GREEN}success${NC}"
+            exit 0
+        else
+            echo -e "${RED}$test_status${NC}"
+            exit 1
+        fi
     fi
 
     sleep 5
