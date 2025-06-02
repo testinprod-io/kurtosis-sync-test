@@ -81,7 +81,7 @@ echo "assertoor api: $assertoor_url"
 # extract assertoor config and clean it up
 echo "load assertoor config & get non validating client pairs..."
 assertoor_config=$(kurtosis files inspect "$enclave" assertoor-config assertoor-config.yaml | 
-    tail -n +3 | # Skip the first two lines (INFO and "File contents:")
+    tail -n +2 | # Skip the first line ("File contents:")
     sed 's/\r//g' | # Remove any carriage returns
     sed 's/[[:cntrl:]]//g' # Remove control characters
 )
@@ -99,9 +99,9 @@ non_validating_pairs=$(
     yq -r '.globalVars | (.clientPairNames - .validatorPairNames)[]' 2>/dev/null |
     while IFS= read -r client ; do
         if [ ! -z "$client" ]; then
-            echo "=== Debug: Processing client: $client ==="
+            echo "=== Debug: Processing client: $client ===" >&2
             client_parts=( $(echo $client | tr '-' ' ') )
-            echo "=== Debug: Client parts: ${client_parts[@]} ==="
+            echo "=== Debug: Client parts: ${client_parts[@]} ===" >&2
             if [ ${#client_parts[@]} -eq 3 ]; then
                 cl_container="cl-${client_parts[0]}-${client_parts[2]}-${client_parts[1]}"
                 el_container="el-${client_parts[0]}-${client_parts[1]}-${client_parts[2]}"
@@ -137,10 +137,23 @@ done
 echo ""
 echo "Waiting for chain progress... (${WAIT_TIME} seconds)"
 
-if [ ${WAIT_TIME} -eq 0 ]; then
-    read -p "Hit ENTER to continue"
+if [ -t 0 ]; then
+    # We have an interactive shell (TTY)
+    if [ "${WAIT_TIME}" -eq 0 ]; then
+        echo "Hit ENTER to continue"
+        read
+    else
+        echo "Hit ENTER or wait ${WAIT_TIME} seconds"
+        read -t "${WAIT_TIME}"
+    fi
 else
-    read -t ${WAIT_TIME} -p "Hit ENTER or wait ${WAIT_TIME} seconds"
+    # Non-interactive shell
+    if [ "${WAIT_TIME}" -eq 0 ]; then
+        echo "No TTY detected and WAIT_TIME=0; continuing immediately."
+    else
+        echo "No TTY detected; sleeping for ${WAIT_TIME} seconds."
+        sleep "${WAIT_TIME}"
+    fi
 fi
 # 4: start previously stopped clients
 echo ""
@@ -232,16 +245,18 @@ do
         echo -n "+"
     else
         echo ""
-        echo -n "sync test complete! status:"
-        if [ "$test_status" == "success" ]; then
-            echo "${GREEN}success${NC}"
-        else
-            echo "${RED}$test_status${NC}"
-        fi
-
+        echo "sync test results:"
         echo ""
         get_tasks_status "$test_data"
-        break
+
+        echo "sync test complete! status:"
+        if [ "$test_status" == "success" ]; then
+            echo -e "${GREEN}success${NC}"
+            exit 0
+        else
+            echo -e "${RED}$test_status${NC}"
+            exit 1
+        fi
     fi
 
     sleep 5
