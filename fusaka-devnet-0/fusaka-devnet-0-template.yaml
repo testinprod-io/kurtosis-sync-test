@@ -1,0 +1,23 @@
+participants:
+  - el_type: ${EL_CLIENT_TYPE}
+    el_image: ${EL_CLIENT_IMAGE}
+    cl_type: ${CL_CLIENT_TYPE}
+    cl_image: ${CL_CLIENT_IMAGE}
+    validator_count: 0
+network_params:
+  network: fusaka-devnet-0
+port_publisher:
+  nat_exit_ip: ${NAT_EXIT_IP}
+  el:
+    enabled: false
+  cl:
+    enabled: false
+persistent: true
+global_log_level: info
+snooper_enabled: false
+ethereum_metrics_exporter_enabled: false
+assertoor_params:
+  run_stability_check: false
+  run_block_proposal_check: false
+additional_services:
+  - assertoor
