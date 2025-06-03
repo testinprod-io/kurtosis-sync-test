@@ -318,7 +318,7 @@ test_client() {
     fi
     
     # Start sync test
-    local test_config='{"test_id":"synchronized-check","config":{"clientPairNames":["cl-1-'${client}'-'${el_type}'","el-1-'${el_type}'-'${client}'"]}}'
+    local test_config='{"test_id":"synchronized-check","config":{"clientPairNames":["1-'${client}'-'${el_type}'"]}}'
     local test_start=$(curl -s \
         -H "Accept: application/json" \
         -H "Content-Type:application/json" \
