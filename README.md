@@ -43,6 +43,96 @@ Instead of using `make run`, you can manually invoke the `synctest.sh` script wi
 - `<enclave-name>`: Name of the enclave (defaults to `synctest-XXX`, where `XXX` is a random string)
 - `<kurtosis-config>`: Path to the Kurtosis configuration file (defaults to `./kurtosis-config.yaml`)
 
+## PeerDAS Sync Test
+
+The `peerdas-sync-test.sh` script is designed to test Consensus Layer (CL) clients' synchronization capabilities on the fusaka-devnet-0 network with PeerDAS support.
+
+### Usage
+
+#### Using Make commands
+
+```sh
+# Test all CL clients with default settings
+make peerdas-test
+
+# Test a specific CL client
+make peerdas-test ARGS="-c lighthouse"
+
+# Test with a custom Docker image
+make peerdas-test ARGS="-c teku -i consensys/teku:custom-branch"
+
+# Test with a specific EL client
+make peerdas-test ARGS="-c lighthouse -e nethermind"
+
+# Use genesis sync instead of checkpoint sync
+make peerdas-test ARGS="-c lighthouse --genesis-sync"
+
+# Set a custom timeout
+make peerdas-test ARGS="-t 2400"
+
+# Show help
+make peerdas-test ARGS="-h"
+```
+
+#### Direct script usage
+
+```sh
+# Test all CL clients with default settings
+./peerdas-sync-test.sh
+
+# Test a specific CL client
+./peerdas-sync-test.sh -c lighthouse
+
+# Test with a custom Docker image
+./peerdas-sync-test.sh -c teku -i consensys/teku:custom-branch
+
+# Test with a specific EL client (default is geth)
+./peerdas-sync-test.sh -c lighthouse -e nethermind
+
+# Use genesis sync instead of checkpoint sync
+./peerdas-sync-test.sh -c lighthouse --genesis-sync
+
+# Set a custom timeout (in seconds)
+./peerdas-sync-test.sh -t 2400
+```
+
+### Options
+
+- `-c <client>`: Test specific CL client (lighthouse, teku, prysm, nimbus, lodestar, grandine)
+- `-i <image>`: Use custom Docker image for the CL client
+- `-e <client>`: Use specific EL client (geth, nethermind, reth, besu, erigon) (default: geth)
+- `-E <image>`: Use custom Docker image for the EL client
+- `-t <timeout>`: Set timeout in seconds (default: 1800)
+- `--genesis-sync`: Use genesis sync instead of checkpoint sync (default: checkpoint sync)
+- `-h`: Show help message
+
+### Supported Clients
+
+**Consensus Layer (CL) clients:**
+- Lighthouse
+- Teku
+- Prysm
+- Nimbus
+- Lodestar
+- Grandine
+
+**Execution Layer (EL) clients:**
+- Geth (default)
+- Nethermind
+- Reth
+- Besu
+- Erigon
+
+### Test Output
+
+The script will generate a summary report showing:
+- Test status for each client (Success/Failed/Timeout)
+- Sync time for successful tests
+- Failure reasons for failed tests
+- Log file locations for debugging failed tests
+
+Failed test logs are saved to the `logs/` directory with the enclave name.
+
 ## Script Description
 
 The script performs the following steps:

@@ -18,14 +18,13 @@ run-custom-wait:
 	./synctest.sh -t $$wait_time
 
 # PeerDAS sync test targets
+# Usage examples:
+#   make peerdas-test                                    # Test all clients
+#   make peerdas-test ARGS="-c lighthouse"              # Test specific client
+#   make peerdas-test ARGS="-c teku --genesis-sync"     # Test with genesis sync
+#   make peerdas-test ARGS="-c lighthouse -e nethermind" # Test with specific EL
+#   make peerdas-test ARGS="-h"                         # Show help
 peerdas-test:
-	./peerdas-sync-test.sh
+	./peerdas-sync-test.sh $(ARGS)
 
-peerdas-test-client:
-	@read -p "Enter CL client name (lighthouse/teku/prysm/nimbus/lodestar/grandine): " client; \
-	./peerdas-sync-test.sh -c $$client
-
-peerdas-test-custom:
-	@read -p "Enter CL client name: " client; \
-	read -p "Enter Docker image: " image; \
-	./peerdas-sync-test.sh -c $$client -i $$image
+.PHONY: all run clean run-no-wait run-custom-wait peerdas-test

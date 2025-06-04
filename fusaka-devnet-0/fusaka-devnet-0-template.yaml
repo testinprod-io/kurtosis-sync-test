@@ -21,3 +21,4 @@ assertoor_params:
   run_block_proposal_check: false
 additional_services:
   - assertoor
+checkpoint_sync_enabled: ${CHECKPOINT_SYNC}

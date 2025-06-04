@@ -24,6 +24,7 @@ CUSTOM_EL_IMAGE=""                                               # Custom Docker
 TEMPLATE_FILE="${__dir}/fusaka-devnet-0/fusaka-devnet-0-template.yaml"  # Kurtosis config template
 TEMP_CONFIG="/tmp/fusaka-devnet-0-config-$$.yaml"               # Temporary config file with PID suffix
 LOGS_DIR="${__dir}/logs"                                         # Directory to save failure logs
+GENESIS_SYNC=false                                               # Use genesis sync instead of checkpoint sync
 
 # List of supported Consensus Layer (CL) clients to test
 CL_CLIENTS="lighthouse teku prysm nimbus lodestar grandine"
@@ -82,6 +83,7 @@ show_help() {
     echo "  -e <client>    Use specific EL client (geth, nethermind, reth, besu, erigon) (default: geth)"
     echo "  -E <image>     Use custom Docker image for the EL client"
     echo "  -t <timeout>   Set timeout in seconds (default: 1800)"
+    echo "  --genesis-sync Use genesis sync instead of checkpoint sync (default: checkpoint sync)"
     echo "  -h             Show this help message"
     echo ""
     echo "Examples:"
@@ -91,6 +93,7 @@ show_help() {
     echo "  $0 -e nethermind                      # Test all CL clients with Nethermind"
     echo "  $0 -c lighthouse -e reth              # Test Lighthouse with Reth"
     echo "  $0 -c teku -e besu -E hyperledger/besu:develop  # Test Teku with custom Besu image"
+    echo "  $0 -c lighthouse --genesis-sync      # Test Lighthouse with genesis sync"
     exit 0
 }
 
@@ -102,6 +105,16 @@ show_help() {
 # -E: Custom EL client Docker image
 # -t: Timeout in seconds
 # -h: Show help
+# --genesis-sync: Use genesis sync instead of checkpoint sync
+# First, handle long options
+for arg in "$@"; do
+    if [[ "$arg" == "--genesis-sync" ]]; then
+        GENESIS_SYNC=true
+        # Remove the processed long option from arguments
+        set -- "${@/$arg/}"
+    fi
+done
+
 while getopts ":c:i:e:E:t:h" opt; do
     case ${opt} in
         c )  # CL client selection
@@ -215,9 +228,15 @@ generate_config() {
     export EL_CLIENT_TYPE="$el_type"
     export EL_CLIENT_IMAGE="$el_image"
     export NAT_EXIT_IP="$nat_exit_ip"
+    # Set checkpoint sync based on GENESIS_SYNC flag
+    if [ "$GENESIS_SYNC" = true ]; then
+        export CHECKPOINT_SYNC="false"
+    else
+        export CHECKPOINT_SYNC="true"
+    fi
     
     # Substitute template variables and create temporary config file
-    envsubst '$CL_CLIENT_TYPE $CL_CLIENT_IMAGE $EL_CLIENT_TYPE $EL_CLIENT_IMAGE $NAT_EXIT_IP' < "$TEMPLATE_FILE" > "$TEMP_CONFIG"
+    envsubst '$CL_CLIENT_TYPE $CL_CLIENT_IMAGE $EL_CLIENT_TYPE $EL_CLIENT_IMAGE $NAT_EXIT_IP $CHECKPOINT_SYNC' < "$TEMPLATE_FILE" > "$TEMP_CONFIG"
 }
 
 # Add test result to arrays for final reporting
