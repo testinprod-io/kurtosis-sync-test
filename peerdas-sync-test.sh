@@ -562,7 +562,7 @@ generate_report() {
     # Table header with column labels
     echo -e "Consensus Layer Clients:"
     printf "%-12s | %-8s | %-10s | %s\n" "Client" "Status" "Sync Time" "Notes"
-    printf "%-12s-+-%-8s-+-%-10s-+-%s\n" "------------" "--------" "----------" "-----"
+    printf "%-12s---%-8s---%-10s---%s\n" "------------" "--------" "----------" "-----"
     
     # Track success statistics
     local success_count=0
