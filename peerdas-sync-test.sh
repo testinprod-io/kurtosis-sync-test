@@ -658,8 +658,7 @@ generate_report() {
     
     # Print summary statistics
     echo -e "\nSummary: ${success_count}/${total_count} clients successfully synced"
-    echo -e "${GRAY}Note: EL Sync Time shows how long the execution layer took to sync${NC}"
-    
+
     # Exit with appropriate code
     # 0 = all tests passed, 1 = some tests failed
     if [ $success_count -eq $total_count ]; then
