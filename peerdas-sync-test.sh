@@ -18,7 +18,7 @@ NC='\033[0m'           # No Color - resets to default
 # Default configuration values
 WAIT_TIME=1800                                                    # Default timeout in seconds (30 minutes)
 SPECIFIC_CLIENT=""                                                # Specific CL client to test (empty = test all)
-CUSTOM_IMAGE=""                                                   # Custom Docker image for CL client
+CUSTOM_CL_IMAGE=""                                                # Custom Docker image for CL client
 SPECIFIC_EL=""                                                    # Specific EL client to use
 CUSTOM_EL_IMAGE=""                                               # Custom Docker image for EL client
 TEMPLATE_FILE="${__dir}/fusaka-devnet-0/fusaka-devnet-0-template.yaml"  # Kurtosis config template
@@ -69,6 +69,7 @@ TEST_RESULTS=()    # Test outcomes (Success, Failed, Timeout, Unknown)
 TEST_TIMES=()      # Time taken for each test
 TEST_NOTES=()      # Additional notes or failure reasons
 TEST_LOG_PATHS=()  # Paths to log directories for failed tests
+TEST_EL_SYNC_TIMES=()  # Execution layer sync times for each test
 
 # Display help information about script usage
 # Shows all available options and provides usage examples
@@ -127,7 +128,7 @@ while getopts ":c:i:e:E:t:h" opt; do
             fi
             ;;
         i )  # Custom CL Docker image
-            CUSTOM_IMAGE=$OPTARG
+            CUSTOM_CL_IMAGE=$OPTARG
             ;;
         e )  # EL client selection
             SPECIFIC_EL=$OPTARG
@@ -219,6 +220,11 @@ generate_config() {
         echo -e "${YELLOW}Warning: Could not fetch external IP, using empty value${NC}"
         nat_exit_ip=""
     else
+        # Check if the IP is IPv6 (contains colons)
+        if [[ "$nat_exit_ip" == *":"* ]]; then
+            echo -e "${RED}Error: sorry bbusa, pls use a real ip standard like ipv4 and not ipv6${NC}"
+            exit 1
+        fi
         echo "Using NAT exit IP: $nat_exit_ip"
     fi
     
@@ -247,12 +253,14 @@ generate_config() {
 #   $3: Time taken for the test
 #   $4: Additional notes or failure reason
 #   $5: Log directory path (optional, for failed tests)
+#   $6: EL sync time (optional)
 add_test_result() {
     local client="$1"    # Name of the tested client
     local result="$2"    # Test outcome
     local time="$3"      # Duration of test
     local note="$4"      # Any additional information
     local log_path="$5"  # Path to logs (for failures)
+    local el_sync_time="${6:-N/A}"  # EL sync time (default: N/A)
     
     # Append to result arrays
     TEST_CLIENTS+=("$client")
@@ -260,6 +268,7 @@ add_test_result() {
     TEST_TIMES+=("$time")
     TEST_NOTES+=("$note")
     TEST_LOG_PATHS+=("$log_path")
+    TEST_EL_SYNC_TIMES+=("$el_sync_time")
 }
 
 # Save logs and configuration when a test fails
@@ -333,9 +342,9 @@ test_client() {
     local el_image="$4"    # Docker image for EL client
     local enclave="peerdas-sync-${client}-$(date +%s)"  # Unique enclave name with timestamp
     local start_time=$(date +%s)  # Track test duration
+    local client_pair="${client}-${el_type}"  # Combined client name for reporting
     
-    echo -e "\n${BLUE}=== Testing ${client} with image ${image} ===${NC}"
-    echo "Using EL client: ${el_type} with image ${el_image}"
+    echo -e "\n${BLUE}=== Testing ${client} with ${el_type} (images: ${image}, ${el_image}) ===${NC}"
     
     # Generate Kurtosis config file from template with current test parameters
     generate_config "$client" "$image" "$el_type" "$el_image"
@@ -357,7 +366,7 @@ test_client() {
         
         # Save logs for debugging the failure and get log path
         local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
-        add_test_result "$client" "Failed" "N/A" "Kurtosis startup failed" "$log_path"
+        add_test_result "$client_pair" "Failed" "N/A" "Kurtosis startup failed" "$log_path" "N/A"
         
         # Cleanup enclave after logs are collected
         echo "Cleaning up failed enclave..."
@@ -374,9 +383,9 @@ test_client() {
     echo "Waiting for services to initialize..."
     sleep 30
     
-    # Extract Assertoor service URL from enclave inspection
+    # Extract Assertoor service URL using kurtosis port print
     # Assertoor is the testing framework that validates sync status
-    local assertoor_url=$(kurtosis enclave inspect "$enclave" 2>/dev/null | grep "assertoor" | grep "http://" | sed -E 's/.*(http:\/\/[^\/ ]*).*/\1/' | head -1)
+    local assertoor_url=$(kurtosis port print "$enclave" assertoor http 2>/dev/null)
     
     # Check if Assertoor service is available
     if [ -z "$assertoor_url" ]; then
@@ -384,7 +393,7 @@ test_client() {
         
         # Save logs on failure and get log path
         local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
-        add_test_result "$client" "Failed" "N/A" "Assertoor not available" "$log_path"
+        add_test_result "$client_pair" "Failed" "N/A" "Assertoor not available" "$log_path" "N/A"
         
         # Cleanup enclave after logs are collected
         echo "Cleaning up failed enclave..."
@@ -414,7 +423,7 @@ test_client() {
         
         # Save logs on failure and get log path
         local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
-        add_test_result "$client" "Failed" "N/A" "Test registration failed" "$log_path"
+        add_test_result "$client_pair" "Failed" "N/A" "Test registration failed" "$log_path" "N/A"
         
         # Cleanup enclave after logs are collected
         echo "Cleaning up failed enclave..."
@@ -444,7 +453,7 @@ test_client() {
         
         # Save logs on failure and get log path
         local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
-        add_test_result "$client" "Failed" "N/A" "Test start failed" "$log_path"
+        add_test_result "$client_pair" "Failed" "N/A" "Test start failed" "$log_path" "N/A"
         
         # Cleanup enclave after logs are collected
         echo "Cleaning up failed enclave..."
@@ -486,7 +495,18 @@ test_client() {
             "success")
                 # Test passed - client successfully synced
                 echo -e "\n${GREEN}Sync test completed successfully!${NC}"
-                add_test_result "$client" "Success" "${minutes}m ${seconds}s" "" ""
+                
+                # Extract EL sync runtime
+                local el_sync_runtime=$(echo "$test_data" | jq -r '.data.tasks[] | select(.name == "check_execution_sync_status") | .runtime' 2>/dev/null || echo "")
+                local el_sync_time="N/A"
+                if [ -n "$el_sync_runtime" ] && [ "$el_sync_runtime" != "null" ]; then
+                    # Convert milliseconds to minutes and seconds
+                    local el_minutes=$((el_sync_runtime / 60000))
+                    local el_seconds=$(((el_sync_runtime % 60000) / 1000))
+                    el_sync_time="${el_minutes}m ${el_seconds}s"
+                fi
+                
+                add_test_result "$client_pair" "Success" "${minutes}m ${seconds}s" "" "" "$el_sync_time"
                 test_complete=true
                 break
                 ;;
@@ -496,9 +516,19 @@ test_client() {
                 # Extract failure reason from the first failed task
                 local failure_reason=$(echo "$test_data" | jq -r '.data.tasks[] | select(.result == "failure") | .title' 2>/dev/null | head -1)
                 
+                # Extract EL sync runtime (even for failures)
+                local el_sync_runtime=$(echo "$test_data" | jq -r '.data.tasks[] | select(.name == "check_execution_sync_status") | .runtime' 2>/dev/null || echo "")
+                local el_sync_time="N/A"
+                if [ -n "$el_sync_runtime" ] && [ "$el_sync_runtime" != "null" ]; then
+                    # Convert milliseconds to minutes and seconds
+                    local el_minutes=$((el_sync_runtime / 60000))
+                    local el_seconds=$(((el_sync_runtime % 60000) / 1000))
+                    el_sync_time="${el_minutes}m ${el_seconds}s"
+                fi
+                
                 # Save logs on failure and get log path
                 local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
-                add_test_result "$client" "Failed" "${minutes}m ${seconds}s" "${failure_reason:-Unknown failure}" "$log_path"
+                add_test_result "$client_pair" "Failed" "${minutes}m ${seconds}s" "${failure_reason:-Unknown failure}" "$log_path" "$el_sync_time"
                 
                 test_complete=true
                 break
@@ -507,9 +537,19 @@ test_client() {
                 # Unexpected test status - treat as failure
                 echo -e "\n${YELLOW}Unknown test status: $test_status${NC}"
                 
+                # Extract EL sync runtime (even for unknown status)
+                local el_sync_runtime=$(echo "$test_data" | jq -r '.data.tasks[] | select(.name == "check_execution_sync_status") | .runtime' 2>/dev/null || echo "")
+                local el_sync_time="N/A"
+                if [ -n "$el_sync_runtime" ] && [ "$el_sync_runtime" != "null" ]; then
+                    # Convert milliseconds to minutes and seconds
+                    local el_minutes=$((el_sync_runtime / 60000))
+                    local el_seconds=$(((el_sync_runtime % 60000) / 1000))
+                    el_sync_time="${el_minutes}m ${el_seconds}s"
+                fi
+                
                 # Save logs on failure and get log path
                 local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
-                add_test_result "$client" "Unknown" "${minutes}m ${seconds}s" "Unknown status: $test_status" "$log_path"
+                add_test_result "$client_pair" "Unknown" "${minutes}m ${seconds}s" "Unknown status: $test_status" "$log_path" "$el_sync_time"
                 
                 test_complete=true
                 break
@@ -525,9 +565,20 @@ test_client() {
     if [ "$test_complete" = false ]; then
         echo -e "\n${RED}Test timed out after ${WAIT_TIME} seconds${NC}"
         
+        # Try to get EL sync runtime even for timeout
+        local test_data=$(curl -s "$assertoor_url/api/v1/test_run/$test_run_id" 2>/dev/null)
+        local el_sync_runtime=$(echo "$test_data" | jq -r '.data.tasks[] | select(.name == "check_execution_sync_status") | .runtime' 2>/dev/null || echo "")
+        local el_sync_time="N/A"
+        if [ -n "$el_sync_runtime" ] && [ "$el_sync_runtime" != "null" ]; then
+            # Convert milliseconds to minutes and seconds
+            local el_minutes=$((el_sync_runtime / 60000))
+            local el_seconds=$(((el_sync_runtime % 60000) / 1000))
+            el_sync_time="${el_minutes}m ${el_seconds}s"
+        fi
+        
         # Save logs on failure and get log path
         local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
-        add_test_result "$client" "Timeout" "${minutes}m ${seconds}s" "Exceeded ${WAIT_TIME}s timeout" "$log_path"
+        add_test_result "$client_pair" "Timeout" "${minutes}m ${seconds}s" "Exceeded ${WAIT_TIME}s timeout" "$log_path" "$el_sync_time"
     fi
     
     # Calculate final test duration if not already done (for timeout cases)
@@ -560,9 +611,9 @@ generate_report() {
     echo -e "==============================================${NC}\n"
     
     # Table header with column labels
-    echo -e "Consensus Layer Clients:"
-    printf "%-12s | %-8s | %-10s | %s\n" "Client" "Status" "Sync Time" "Notes"
-    printf "%-12s---%-8s---%-10s---%s\n" "------------" "--------" "----------" "-----"
+    echo -e "Client Pair Test Results:"
+    printf "%-20s | %-8s | %-10s | %-12s | %s\n" "CL-EL Pair" "Status" "Total Time" "EL Sync Time" "Notes"
+    printf "%-20s---%-8s---%-10s---%-12s---%s\n" "--------------------" "--------" "----------" "------------" "-----"
     
     # Track success statistics
     local success_count=0
@@ -575,6 +626,7 @@ generate_report() {
         local time="${TEST_TIMES[$i]}"
         local notes="${TEST_NOTES[$i]}"
         local log_path="${TEST_LOG_PATHS[$i]}"
+        local el_sync_time="${TEST_EL_SYNC_TIMES[$i]}"
         
         # Apply color coding based on test status
         case "$status" in
@@ -594,11 +646,11 @@ generate_report() {
         esac
         
         # Print formatted row for this client
-        printf "%-12s | %-8b | %-10s | %s\n" "$client" "$status_colored" "$time" "$notes"
+        printf "%-20s | %-8b | %-10s | %-12s | %s\n" "$client" "$status_colored" "$time" "$el_sync_time" "$notes"
         
         # If test failed and we have a log path, show it
         if [[ "$status" != "Success" && -n "$log_path" ]]; then
-            printf "%-12s   %-8s   %-10s   %s\n" "" "" "" "Logs: $log_path"
+            printf "%-20s   %-8s   %-10s   %-12s   %s\n" "" "" "" "" "Logs: $log_path"
         fi
         
         ((total_count++))
@@ -606,6 +658,7 @@ generate_report() {
     
     # Print summary statistics
     echo -e "\nSummary: ${success_count}/${total_count} clients successfully synced"
+    echo -e "${GRAY}Note: EL Sync Time shows how long the execution layer took to sync${NC}"
     
     # Exit with appropriate code
     # 0 = all tests passed, 1 = some tests failed
@@ -664,8 +717,8 @@ main() {
     for client in "${clients_to_test[@]}"; do
         local image
         # Use custom image if provided for the specific client
-        if [ -n "$CUSTOM_IMAGE" ] && [ "$client" = "$SPECIFIC_CLIENT" ]; then
-            image="$CUSTOM_IMAGE"
+        if [ -n "$CUSTOM_CL_IMAGE" ] && [ "$client" = "$SPECIFIC_CLIENT" ]; then
+            image="$CUSTOM_CL_IMAGE"
         else
             # Use default image for the client
             image=$(get_default_image "$client")
