@@ -1,0 +1,13 @@
+participants:
+  - el_type: ${EL_CLIENT_TYPE}
+    el_image: ${EL_CLIENT_IMAGE}
+    cl_type: ${CL_CLIENT_TYPE}
+    cl_image: ${CL_CLIENT_IMAGE}
+network_params:
+  network: fusaka-devnet-0
+port_publisher:
+  nat_exit_ip: ${NAT_EXIT_IP}
+persistent: true
+additional_services:
+  - assertoor
+checkpoint_sync_enabled: ${CHECKPOINT_SYNC}
