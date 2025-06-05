@@ -69,7 +69,6 @@ TEST_RESULTS=()    # Test outcomes (Success, Failed, Timeout, Unknown)
 TEST_TIMES=()      # Time taken for each test
 TEST_NOTES=()      # Additional notes or failure reasons
 TEST_LOG_PATHS=()  # Paths to log directories for failed tests
-TEST_EL_SYNC_TIMES=()  # Execution layer sync times for each test
 
 # Display help information about script usage
 # Shows all available options and provides usage examples
@@ -245,6 +244,27 @@ generate_config() {
     envsubst '$CL_CLIENT_TYPE $CL_CLIENT_IMAGE $EL_CLIENT_TYPE $EL_CLIENT_IMAGE $NAT_EXIT_IP $CHECKPOINT_SYNC' < "$TEMPLATE_FILE" > "$TEMP_CONFIG"
 }
 
+# Helper function to extract runtime from task data and format it
+# Parameters:
+#   $1: test_data JSON
+#   $2: task name to extract runtime for
+# Returns: Formatted time string (e.g., "5m 30s") or "N/A"
+extract_task_runtime() {
+    local test_data="$1"
+    local task_name="$2"
+    
+    local runtime=$(echo "$test_data" | jq -r ".data.tasks[] | select(.name == \"$task_name\") | .runtime" 2>/dev/null || echo "")
+    
+    if [ -n "$runtime" ] && [ "$runtime" != "null" ] && [ "$runtime" != "0" ]; then
+        # Convert milliseconds to minutes and seconds
+        local minutes=$((runtime / 60000))
+        local seconds=$(((runtime % 60000) / 1000))
+        echo "${minutes}m ${seconds}s"
+    else
+        echo "N/A"
+    fi
+}
+
 # Add test result to arrays for final reporting
 # Stores test outcome data in parallel arrays
 # Parameters:
@@ -253,14 +273,12 @@ generate_config() {
 #   $3: Time taken for the test
 #   $4: Additional notes or failure reason
 #   $5: Log directory path (optional, for failed tests)
-#   $6: EL sync time (optional)
 add_test_result() {
     local client="$1"    # Name of the tested client
     local result="$2"    # Test outcome
     local time="$3"      # Duration of test
     local note="$4"      # Any additional information
     local log_path="$5"  # Path to logs (for failures)
-    local el_sync_time="${6:-N/A}"  # EL sync time (default: N/A)
     
     # Append to result arrays
     TEST_CLIENTS+=("$client")
@@ -268,7 +286,6 @@ add_test_result() {
     TEST_TIMES+=("$time")
     TEST_NOTES+=("$note")
     TEST_LOG_PATHS+=("$log_path")
-    TEST_EL_SYNC_TIMES+=("$el_sync_time")
 }
 
 # Save logs and configuration when a test fails
@@ -366,7 +383,7 @@ test_client() {
         
         # Save logs for debugging the failure and get log path
         local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
-        add_test_result "$client_pair" "Failed" "N/A" "Kurtosis startup failed" "$log_path" "N/A"
+        add_test_result "$client_pair" "Failed" "N/A" "Kurtosis startup failed" "$log_path"
         
         # Cleanup enclave after logs are collected
         echo "Cleaning up failed enclave..."
@@ -393,7 +410,7 @@ test_client() {
         
         # Save logs on failure and get log path
         local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
-        add_test_result "$client_pair" "Failed" "N/A" "Assertoor not available" "$log_path" "N/A"
+        add_test_result "$client_pair" "Failed" "N/A" "Assertoor not available" "$log_path"
         
         # Cleanup enclave after logs are collected
         echo "Cleaning up failed enclave..."
@@ -423,7 +440,7 @@ test_client() {
         
         # Save logs on failure and get log path
         local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
-        add_test_result "$client_pair" "Failed" "N/A" "Test registration failed" "$log_path" "N/A"
+        add_test_result "$client_pair" "Failed" "N/A" "Test registration failed" "$log_path"
         
         # Cleanup enclave after logs are collected
         echo "Cleaning up failed enclave..."
@@ -453,7 +470,7 @@ test_client() {
         
         # Save logs on failure and get log path
         local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
-        add_test_result "$client_pair" "Failed" "N/A" "Test start failed" "$log_path" "N/A"
+        add_test_result "$client_pair" "Failed" "N/A" "Test start failed" "$log_path"
         
         # Cleanup enclave after logs are collected
         echo "Cleaning up failed enclave..."
@@ -480,12 +497,6 @@ test_client() {
         local test_data=$(curl -s "$assertoor_url/api/v1/test_run/$test_run_id" 2>/dev/null)
         local test_status=$(echo "$test_data" | jq -r ".data.status" 2>/dev/null)
         
-        # Calculate current test duration for reporting
-        local current_time=$(date +%s)
-        local duration=$((current_time - start_time))
-        local minutes=$((duration / 60))
-        local seconds=$((duration % 60))
-        
         # Handle different test statuses
         case "$test_status" in
             "pending"|"running")
@@ -496,17 +507,10 @@ test_client() {
                 # Test passed - client successfully synced
                 echo -e "\n${GREEN}Sync test completed successfully!${NC}"
                 
-                # Extract EL sync runtime
-                local el_sync_runtime=$(echo "$test_data" | jq -r '.data.tasks[] | select(.name == "check_execution_sync_status") | .runtime' 2>/dev/null || echo "")
-                local el_sync_time="N/A"
-                if [ -n "$el_sync_runtime" ] && [ "$el_sync_runtime" != "null" ]; then
-                    # Convert milliseconds to minutes and seconds
-                    local el_minutes=$((el_sync_runtime / 60000))
-                    local el_seconds=$(((el_sync_runtime % 60000) / 1000))
-                    el_sync_time="${el_minutes}m ${el_seconds}s"
-                fi
+                # Extract runtime from task data
+                local total_time=$(extract_task_runtime "$test_data" "run_task_matrix")
                 
-                add_test_result "$client_pair" "Success" "${minutes}m ${seconds}s" "" "" "$el_sync_time"
+                add_test_result "$client_pair" "Success" "$total_time" "" ""
                 test_complete=true
                 break
                 ;;
@@ -516,19 +520,12 @@ test_client() {
                 # Extract failure reason from the first failed task
                 local failure_reason=$(echo "$test_data" | jq -r '.data.tasks[] | select(.result == "failure") | .title' 2>/dev/null | head -1)
                 
-                # Extract EL sync runtime (even for failures)
-                local el_sync_runtime=$(echo "$test_data" | jq -r '.data.tasks[] | select(.name == "check_execution_sync_status") | .runtime' 2>/dev/null || echo "")
-                local el_sync_time="N/A"
-                if [ -n "$el_sync_runtime" ] && [ "$el_sync_runtime" != "null" ]; then
-                    # Convert milliseconds to minutes and seconds
-                    local el_minutes=$((el_sync_runtime / 60000))
-                    local el_seconds=$(((el_sync_runtime % 60000) / 1000))
-                    el_sync_time="${el_minutes}m ${el_seconds}s"
-                fi
+                # Extract runtime from task data
+                local total_time=$(extract_task_runtime "$test_data" "run_task_matrix")
                 
                 # Save logs on failure and get log path
                 local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
-                add_test_result "$client_pair" "Failed" "${minutes}m ${seconds}s" "${failure_reason:-Unknown failure}" "$log_path" "$el_sync_time"
+                add_test_result "$client_pair" "Failed" "$total_time" "${failure_reason:-Unknown failure}" "$log_path"
                 
                 test_complete=true
                 break
@@ -537,19 +534,12 @@ test_client() {
                 # Unexpected test status - treat as failure
                 echo -e "\n${YELLOW}Unknown test status: $test_status${NC}"
                 
-                # Extract EL sync runtime (even for unknown status)
-                local el_sync_runtime=$(echo "$test_data" | jq -r '.data.tasks[] | select(.name == "check_execution_sync_status") | .runtime' 2>/dev/null || echo "")
-                local el_sync_time="N/A"
-                if [ -n "$el_sync_runtime" ] && [ "$el_sync_runtime" != "null" ]; then
-                    # Convert milliseconds to minutes and seconds
-                    local el_minutes=$((el_sync_runtime / 60000))
-                    local el_seconds=$(((el_sync_runtime % 60000) / 1000))
-                    el_sync_time="${el_minutes}m ${el_seconds}s"
-                fi
+                # Extract runtime from task data
+                local total_time=$(extract_task_runtime "$test_data" "run_task_matrix")
                 
                 # Save logs on failure and get log path
                 local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
-                add_test_result "$client_pair" "Unknown" "${minutes}m ${seconds}s" "Unknown status: $test_status" "$log_path" "$el_sync_time"
+                add_test_result "$client_pair" "Unknown" "$total_time" "Unknown status: $test_status" "$log_path"
                 
                 test_complete=true
                 break
@@ -565,28 +555,15 @@ test_client() {
     if [ "$test_complete" = false ]; then
         echo -e "\n${RED}Test timed out after ${WAIT_TIME} seconds${NC}"
         
-        # Try to get EL sync runtime even for timeout
+        # Try to get final test data for timeout case
         local test_data=$(curl -s "$assertoor_url/api/v1/test_run/$test_run_id" 2>/dev/null)
-        local el_sync_runtime=$(echo "$test_data" | jq -r '.data.tasks[] | select(.name == "check_execution_sync_status") | .runtime' 2>/dev/null || echo "")
-        local el_sync_time="N/A"
-        if [ -n "$el_sync_runtime" ] && [ "$el_sync_runtime" != "null" ]; then
-            # Convert milliseconds to minutes and seconds
-            local el_minutes=$((el_sync_runtime / 60000))
-            local el_seconds=$(((el_sync_runtime % 60000) / 1000))
-            el_sync_time="${el_minutes}m ${el_seconds}s"
-        fi
+        
+        # Extract runtime from task data
+        local total_time=$(extract_task_runtime "$test_data" "run_task_matrix")
         
         # Save logs on failure and get log path
         local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
-        add_test_result "$client_pair" "Timeout" "${minutes}m ${seconds}s" "Exceeded ${WAIT_TIME}s timeout" "$log_path" "$el_sync_time"
-    fi
-    
-    # Calculate final test duration if not already done (for timeout cases)
-    if [ "$test_complete" = false ]; then
-        local end_time=$(date +%s)
-        local duration=$((end_time - start_time))
-        local minutes=$((duration / 60))
-        local seconds=$((duration % 60))
+        add_test_result "$client_pair" "Timeout" "$total_time" "Exceeded ${WAIT_TIME}s timeout" "$log_path"
     fi
     
     # Cleanup after test
@@ -612,8 +589,8 @@ generate_report() {
     
     # Table header with column labels
     echo -e "Client Pair Test Results:"
-    printf "%-20s | %-8s | %-10s | %-12s | %s\n" "CL-EL Pair" "Status" "Total Time" "EL Sync Time" "Notes"
-    printf "%-20s---%-8s---%-10s---%-12s---%s\n" "--------------------" "--------" "----------" "------------" "-----"
+    printf "%-20s | %-8s | %-10s | %s\n" "CL-EL Pair" "Status" "Total Time" "Notes"
+    printf "%-20s---%-8s---%-10s---%s\n" "--------------------" "--------" "----------" "-----"
     
     # Track success statistics
     local success_count=0
@@ -626,7 +603,6 @@ generate_report() {
         local time="${TEST_TIMES[$i]}"
         local notes="${TEST_NOTES[$i]}"
         local log_path="${TEST_LOG_PATHS[$i]}"
-        local el_sync_time="${TEST_EL_SYNC_TIMES[$i]}"
         
         # Apply color coding based on test status
         case "$status" in
@@ -646,11 +622,11 @@ generate_report() {
         esac
         
         # Print formatted row for this client
-        printf "%-20s | %-8b | %-10s | %-12s | %s\n" "$client" "$status_colored" "$time" "$el_sync_time" "$notes"
+        printf "%-20s | %-8b | %-10s | %s\n" "$client" "$status_colored" "$time" "$notes"
         
         # If test failed and we have a log path, show it
         if [[ "$status" != "Success" && -n "$log_path" ]]; then
-            printf "%-20s   %-8s   %-10s   %-12s   %s\n" "" "" "" "" "Logs: $log_path"
+            printf "%-20s   %-8s   %-10s   %s\n" "" "" "" "Logs: $log_path"
         fi
         
         ((total_count++))
