@@ -32,6 +32,10 @@ on:
         options:
           - lighthouse
           - teku
+          - prysm
+          - nimbus
+          - lodestar
+          - grandine
         default: 'lighthouse'
       
       wait_time:

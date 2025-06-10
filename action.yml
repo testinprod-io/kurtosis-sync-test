@@ -24,7 +24,7 @@ inputs:
     default: 'geth'
   
   cl_client:
-    description: 'Consensus layer client (lighthouse, teku)'
+    description: 'Consensus layer client (lighthouse, teku, prysm, nimbus, lodestar, grandine)'
     required: false
     default: 'lighthouse'
   
@@ -79,8 +79,8 @@ runs:
         fi
         
         # Validate CL client
-        if [[ ! "${{ inputs.cl_client }}" =~ ^(lighthouse|teku)$ ]]; then
-          echo "Error: Invalid CL client '${{ inputs.cl_client }}'. Must be one of: lighthouse, teku"
+        if [[ ! "${{ inputs.cl_client }}" =~ ^(lighthouse|teku|prysm|nimbus|lodestar|grandine)$ ]]; then
+          echo "Error: Invalid CL client '${{ inputs.cl_client }}'. Must be one of: lighthouse, teku, prysm, nimbus, lodestar, grandine"
           exit 1
         fi
 

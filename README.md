@@ -178,7 +178,7 @@ This repository also provides a reusable GitHub Action for testing Ethereum clie
 
 - **Automated Testing**: Test Ethereum execution and consensus layer client pairs
 - **Multi-Network Support**: Test on mainnet, sepolia, and hoodi networks
-- **Client Flexibility**: Support for multiple EL (Geth, Nethermind, Reth, Besu, Erigon) and CL (Lighthouse, Teku) clients
+- **Client Flexibility**: Support for multiple EL (Geth, Nethermind, Reth, Besu, Erigon) and CL (Lighthouse, Teku, Prysm, Nimbus, Lodestar, Grandine) clients
 - **HTML Reports**: Generate beautiful HTML reports for GitHub Pages
 - **Configurable**: Flexible configuration for different test scenarios
 - **Reusable**: Can be called from other repositories
@@ -220,7 +220,7 @@ jobs:
       matrix:
         network: [mainnet, sepolia, hoodi]
         el_client: [geth, nethermind, reth]
-        cl_client: [lighthouse, teku]
+        cl_client: [lighthouse, teku, prysm, nimbus, lodestar, grandine]
     
     steps:
       - uses: actions/checkout@v4

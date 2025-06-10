@@ -29,7 +29,7 @@ on:
         description: 'CL clients to test (comma-separated for custom scope)'
         required: false
         type: string
-        default: 'lighthouse,teku'
+        default: 'lighthouse,teku,prysm,nimbus,lodestar,grandine'
       
       wait_time:
         description: 'Wait time in seconds'
@@ -65,18 +65,18 @@ jobs:
           if [ "${{ github.event_name }}" == "schedule" ]; then
             NETWORKS="mainnet,sepolia,hoodi"
             EL_CLIENTS="geth,nethermind,reth,besu,erigon"
-            CL_CLIENTS="lighthouse,teku"
+            CL_CLIENTS="lighthouse,teku,prysm,nimbus,lodestar,grandine"
           else
             case "${{ github.event.inputs.test_scope }}" in
               "all-clients")
                 NETWORKS="mainnet,sepolia,hoodi"
                 EL_CLIENTS="geth,nethermind,reth,besu,erigon"
-                CL_CLIENTS="lighthouse,teku"
+                CL_CLIENTS="lighthouse,teku,prysm,nimbus,lodestar,grandine"
                 ;;
               "single-network")
                 NETWORKS="mainnet"
                 EL_CLIENTS="geth,nethermind,reth,besu,erigon"
-                CL_CLIENTS="lighthouse,teku"
+                CL_CLIENTS="lighthouse,teku,prysm,nimbus,lodestar,grandine"
                 ;;
               "custom")
                 NETWORKS="${{ github.event.inputs.networks }}"

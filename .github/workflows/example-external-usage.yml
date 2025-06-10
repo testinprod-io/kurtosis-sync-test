@@ -49,7 +49,7 @@ jobs:
             cl_client: lighthouse
           - network: sepolia
             el_client: reth
-            cl_client: teku
+            cl_client: prysm
     
     steps:
       - name: Matrix sync test
