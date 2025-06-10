@@ -16,13 +16,14 @@ BLUE='\033[0;34m'      # Headers and info
 NC='\033[0m'           # No Color - resets to default
 
 # Default configuration values
+DEVNET="${DEVNET:-fusaka-devnet-1}"                              # Default devnet name (can be overridden)
 WAIT_TIME=1800                                                    # Default timeout in seconds (30 minutes)
 SPECIFIC_CLIENT=""                                                # Specific CL client to test (empty = test all)
 CUSTOM_CL_IMAGE=""                                                # Custom Docker image for CL client
 SPECIFIC_EL=""                                                    # Specific EL client to use
 CUSTOM_EL_IMAGE=""                                               # Custom Docker image for EL client
-TEMPLATE_FILE="${__dir}/fusaka-devnet-0/fusaka-devnet-0-template.yaml"  # Kurtosis config template
-TEMP_CONFIG="/tmp/fusaka-devnet-0-config-$$.yaml"               # Temporary config file with PID suffix
+TEMPLATE_FILE="${__dir}/devnet-templates/devnet-template.yaml"   # Generic Kurtosis config template
+TEMP_CONFIG="/tmp/${DEVNET}-config-$$.yaml"                     # Temporary config file with PID suffix
 LOGS_DIR="${__dir}/logs"                                         # Directory to save failure logs
 GENESIS_SYNC=false                                               # Use genesis sync instead of checkpoint sync
 
@@ -37,27 +38,27 @@ EL_CLIENTS="geth nethermind reth besu erigon"
 # Returns the appropriate ethpandaops Docker image for the given CL client
 get_default_image() {
     case "$1" in
-        "lighthouse") echo "ethpandaops/lighthouse:unstable" ;;              # Lighthouse with EIP-7892 support
-        "teku") echo "ethpandaops/teku:master-7856340" ;;                    # Teku master branch build
-        "prysm") echo "ethpandaops/prysm-beacon-chain:peerdas-bpo" ;;        # Prysm with PeerDAS BPO support
-        "nimbus") echo "ethpandaops/nimbus-eth2:bpo-parsing-c62f33f" ;;      # Nimbus with BPO parsing support
-        "lodestar") echo "ethpandaops/lodestar:peerDAS-d70dab2" ;;                   # Lodestar PeerDAS branch
-        "grandine") echo "ethpandaops/grandine:peerdas-fulu-a0df259" ;;      # Grandine with PeerDAS Fulu support
+        "lighthouse") echo "docker.ethquokkaops.io/dh/ethpandaops/lighthouse:unstable" ;;              # Lighthouse unstable
+        "teku") echo "docker.ethquokkaops.io/dh/ethpandaops/teku:master" ;;                    # Teku master branch build
+        "prysm") echo "docker.ethquokkaops.io/dh/ethpandaops/prysm-beacon-chain:fusaka-devnet-1" ;;        # Prysm fusaka-devnet-1
+        "nimbus") echo "docker.ethquokkaops.io/dh/ethpandaops/nimbus-eth2:column-syncer-767aca4" ;;      # Nimbus column syncer
+        "lodestar") echo "docker.ethquokkaops.io/dh/ethpandaops/lodestar:nc-test-peerdas-7917-f34a4af" ;;                   # Lodestar PeerDAS
+        "grandine") echo "docker.ethquokkaops.io/dh/ethpandaops/grandine:peerdas-fulu" ;;      # Grandine PeerDAS Fulu
         *) echo "" ;;                                                          # Return empty for unknown clients
     esac
 }
 
 # Function to get default Docker image for an EL client
-# Each EL client has a specific fusaka-devnet-0 compatible image
+# Each EL client has a specific devnet compatible image
 # Returns the appropriate ethpandaops Docker image for the given EL client
 get_default_el_image() {
     case "$1" in
-        "geth") echo "ethpandaops/geth:fusaka-devnet-0" ;;                    # Geth for fusaka devnet 0
-        "nethermind") echo "ethpandaops/nethermind:devnet-0" ;;               # Nethermind devnet 0 version
-        "reth") echo "ethpandaops/reth:fusaka-devnet0" ;;                     # Reth for fusaka devnet 0
-        "besu") echo "ethpandaops/besu:fusaka-devnet-0-ed8ec22" ;;            # Besu with specific commit
-        "erigon") echo "ethpandaops/erigon:fusaka-devnet-0-ed36f15" ;;        # Erigon with specific commit
-        *) echo "ethpandaops/geth:fusaka-devnet-0" ;;                         # Default to geth if unknown
+        "geth") echo "docker.ethquokkaops.io/dh/ethpandaops/geth:fusaka-devnet-1" ;;                    # Geth fusaka-devnet-1
+        "nethermind") echo "docker.ethquokkaops.io/dh/ethpandaops/nethermind:fusaka-c98b792" ;;               # Nethermind fusaka
+        "reth") echo "docker.ethquokkaops.io/dh/ethpandaops/reth:fusaka-devnet1" ;;                     # Reth fusaka-devnet1
+        "besu") echo "docker.ethquokkaops.io/dh/ethpandaops/besu:fusaka-devnet-1" ;;            # Besu fusaka-devnet-1
+        "erigon") echo "docker.ethquokkaops.io/dh/ethpandaops/erigon:fusaka-devnet-1" ;;        # Erigon fusaka-devnet-1
+        *) echo "docker.ethquokkaops.io/dh/ethpandaops/geth:fusaka-devnet-1" ;;                         # Default to geth if unknown
     esac
 }
 
@@ -75,23 +76,26 @@ TEST_LOG_PATHS=()  # Paths to log directories for failed tests
 show_help() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
-    echo "Test CL client sync capability on fusaka-devnet-0 network"
+    echo "Test CL client sync capability on ${DEVNET} network"
     echo ""
     echo "Options:"
     echo "  -c <client>    Test specific CL client (lighthouse, teku, prysm, nimbus, lodestar, grandine)"
     echo "  -i <image>     Use custom Docker image for the CL client"
     echo "  -e <client>    Use specific EL client (geth, nethermind, reth, besu, erigon) (default: geth)"
     echo "  -E <image>     Use custom Docker image for the EL client"
+    echo "  -d <devnet>    Specify devnet to use (default: fusaka-devnet-1)"
     echo "  -t <timeout>   Set timeout in seconds (default: 1800)"
     echo "  --genesis-sync Use genesis sync instead of checkpoint sync (default: checkpoint sync)"
     echo "  -h             Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0                                    # Test all CL clients with default geth"
+    echo "  $0                                    # Test all CL clients with default settings"
     echo "  $0 -c lighthouse                      # Test only Lighthouse with default geth"
     echo "  $0 -c teku -i consensys/teku:develop  # Test Teku with custom image"
     echo "  $0 -e nethermind                      # Test all CL clients with Nethermind"
     echo "  $0 -c lighthouse -e reth              # Test Lighthouse with Reth"
+    echo "  $0 -d fusaka-devnet-0                 # Test with fusaka-devnet-0"
+    echo "  $0 -c lighthouse -d fusaka-devnet-2   # Test Lighthouse with fusaka-devnet-2"
     echo "  $0 -c teku -e besu -E hyperledger/besu:develop  # Test Teku with custom Besu image"
     echo "  $0 -c lighthouse --genesis-sync      # Test Lighthouse with genesis sync"
     exit 0
@@ -103,6 +107,7 @@ show_help() {
 # -i: Custom CL client Docker image
 # -e: Specific EL client to use
 # -E: Custom EL client Docker image
+# -d: Devnet to use
 # -t: Timeout in seconds
 # -h: Show help
 # --genesis-sync: Use genesis sync instead of checkpoint sync
@@ -115,7 +120,7 @@ for arg in "$@"; do
     fi
 done
 
-while getopts ":c:i:e:E:t:h" opt; do
+while getopts ":c:i:e:E:d:t:h" opt; do
     case ${opt} in
         c )  # CL client selection
             SPECIFIC_CLIENT=$OPTARG
@@ -140,6 +145,9 @@ while getopts ":c:i:e:E:t:h" opt; do
             ;;
         E )  # Custom EL Docker image
             CUSTOM_EL_IMAGE=$OPTARG
+            ;;
+        d )  # Devnet selection
+            DEVNET=$OPTARG
             ;;
         t )  # Timeout value in seconds
             WAIT_TIME=$OPTARG
@@ -233,6 +241,7 @@ generate_config() {
     export EL_CLIENT_TYPE="$el_type"
     export EL_CLIENT_IMAGE="$el_image"
     export NAT_EXIT_IP="$nat_exit_ip"
+    export DEVNET="$DEVNET"
     # Set checkpoint sync based on GENESIS_SYNC flag
     if [ "$GENESIS_SYNC" = true ]; then
         export CHECKPOINT_SYNC="false"
@@ -241,7 +250,7 @@ generate_config() {
     fi
     
     # Substitute template variables and create temporary config file
-    envsubst '$CL_CLIENT_TYPE $CL_CLIENT_IMAGE $EL_CLIENT_TYPE $EL_CLIENT_IMAGE $NAT_EXIT_IP $CHECKPOINT_SYNC' < "$TEMPLATE_FILE" > "$TEMP_CONFIG"
+    envsubst '$CL_CLIENT_TYPE $CL_CLIENT_IMAGE $EL_CLIENT_TYPE $EL_CLIENT_IMAGE $NAT_EXIT_IP $CHECKPOINT_SYNC $DEVNET' < "$TEMPLATE_FILE" > "$TEMP_CONFIG"
 }
 
 # Helper function to extract runtime from task data and format it
@@ -584,7 +593,7 @@ test_client() {
 generate_report() {
     # Print report header
     echo -e "\n${BLUE}=============================================="
-    echo "PeerDAS Sync Test Results for fusaka-devnet-0"
+    echo "PeerDAS Sync Test Results for ${DEVNET}"
     echo -e "==============================================${NC}\n"
     
     # Table header with column labels
@@ -652,7 +661,7 @@ generate_report() {
 # 4. Generates final report
 main() {
     # Print header
-    echo -e "${BLUE}PeerDAS Sync Test for fusaka-devnet-0${NC}"
+    echo -e "${BLUE}PeerDAS Sync Test for ${DEVNET}${NC}"
     echo "======================================="
     
     # Create logs directory if it doesn't exist

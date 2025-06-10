@@ -4,7 +4,7 @@ participants:
     cl_type: ${CL_CLIENT_TYPE}
     cl_image: ${CL_CLIENT_IMAGE}
 network_params:
-  network: fusaka-devnet-0
+  network: ${DEVNET}
 port_publisher:
   nat_exit_ip: ${NAT_EXIT_IP}
 persistent: true
