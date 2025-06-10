@@ -1,0 +1,187 @@
+name: Sync Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: 'Network to test'
+        required: true
+        type: choice
+        options:
+          - mainnet
+          - sepolia
+          - hoodi
+        default: 'mainnet'
+      
+      el_client:
+        description: 'Execution layer client'
+        required: true
+        type: choice
+        options:
+          - geth
+          - nethermind
+          - reth
+          - besu
+          - erigon
+        default: 'geth'
+      
+      cl_client:
+        description: 'Consensus layer client'
+        required: true
+        type: choice
+        options:
+          - lighthouse
+          - teku
+        default: 'lighthouse'
+      
+      wait_time:
+        description: 'Wait time in seconds before restarting clients'
+        required: false
+        type: number
+        default: 1800
+      
+      enclave_name:
+        description: 'Custom enclave name (optional)'
+        required: false
+        type: string
+  
+  schedule:
+    # Run daily at 2:00 AM UTC
+    - cron: '0 2 * * *'
+
+# Allow only one concurrent deployment, skipping runs queued between the one in-progress and latest queued.
+concurrency:
+  group: "sync-test"
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  sync-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # For scheduled runs, test multiple combinations
+          - network: mainnet
+            el_client: geth
+            cl_client: lighthouse
+          - network: mainnet
+            el_client: nethermind
+            cl_client: teku
+          - network: sepolia
+            el_client: reth
+            cl_client: lighthouse
+          - network: hoodi
+            el_client: besu
+            cl_client: teku
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set matrix values for manual runs
+        id: matrix
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "network=${{ github.event.inputs.network }}" >> $GITHUB_OUTPUT
+            echo "el_client=${{ github.event.inputs.el_client }}" >> $GITHUB_OUTPUT
+            echo "cl_client=${{ github.event.inputs.cl_client }}" >> $GITHUB_OUTPUT
+            echo "wait_time=${{ github.event.inputs.wait_time }}" >> $GITHUB_OUTPUT
+            echo "enclave_name=${{ github.event.inputs.enclave_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "network=${{ matrix.network }}" >> $GITHUB_OUTPUT
+            echo "el_client=${{ matrix.el_client }}" >> $GITHUB_OUTPUT
+            echo "cl_client=${{ matrix.cl_client }}" >> $GITHUB_OUTPUT
+            echo "wait_time=1800" >> $GITHUB_OUTPUT
+            echo "enclave_name=" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Run sync test
+        uses: ./
+        id: sync-test
+        with:
+          network: ${{ steps.matrix.outputs.network }}
+          el_client: ${{ steps.matrix.outputs.el_client }}
+          cl_client: ${{ steps.matrix.outputs.cl_client }}
+          wait_time: ${{ steps.matrix.outputs.wait_time }}
+          enclave_name: ${{ steps.matrix.outputs.enclave_name }}
+          generate_html_report: 'true'
+      
+      - name: Upload to Pages (for matrix builds)
+        if: github.event_name == 'schedule'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          name: sync-test-${{ steps.matrix.outputs.network }}-${{ steps.matrix.outputs.el_client }}-${{ steps.matrix.outputs.cl_client }}
+          path: reports/
+      
+      - name: Display test summary
+        run: |
+          echo "## Sync Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Network:** ${{ steps.matrix.outputs.network }}" >> $GITHUB_STEP_SUMMARY
+          echo "**EL Client:** ${{ steps.matrix.outputs.el_client }}" >> $GITHUB_STEP_SUMMARY
+          echo "**CL Client:** ${{ steps.matrix.outputs.cl_client }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Result:** ${{ steps.sync-test.outputs.test_result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Summary:** ${{ steps.sync-test.outputs.test_summary }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Enclave:** ${{ steps.sync-test.outputs.enclave_name }}" >> $GITHUB_STEP_SUMMARY
+
+  # Job for manual dispatch - single test with pages deployment
+  deploy-pages:
+    if: github.event_name == 'workflow_dispatch'
+    needs: sync-test
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sync-test-results-*
+          path: ./all-reports
+          merge-multiple: true
+      
+      - name: Prepare Pages content
+        run: |
+          mkdir -p pages
+          
+          # Copy reports if they exist
+          if [ -d "./all-reports/reports" ]; then
+            cp -r ./all-reports/reports/* pages/
+          fi
+          
+          # Create index if it doesn't exist
+          if [ ! -f "pages/index.html" ]; then
+            cat > pages/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Sync Test Results</title>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+          <body>
+              <h1>Sync Test Results</h1>
+              <p>No test results available.</p>
+          </body>
+          </html>
+          EOF
+          fi
+      
+      - name: Upload to Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages/
+      
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,447 @@
+name: 'Kurtosis Sync Test'
+description: 'Run Ethereum client synchronization tests using Kurtosis'
+author: 'ethPandaOps'
+
+inputs:
+  enclave_name:
+    description: 'Name for the Kurtosis enclave'
+    required: false
+    default: ''
+  
+  config_file:
+    description: 'Path to the configuration file relative to repository root'
+    required: false
+    default: 'kurtosis-config.yaml'
+  
+  network:
+    description: 'Network to test (mainnet, sepolia, hoodi)'
+    required: false
+    default: 'mainnet'
+  
+  el_client:
+    description: 'Execution layer client (geth, nethermind, reth, besu, erigon)'
+    required: false
+    default: 'geth'
+  
+  cl_client:
+    description: 'Consensus layer client (lighthouse, teku)'
+    required: false
+    default: 'lighthouse'
+  
+  wait_time:
+    description: 'Wait time in seconds before restarting clients'
+    required: false
+    default: '1800'
+  
+  generate_html_report:
+    description: 'Whether to generate HTML report for GitHub Pages'
+    required: false
+    default: 'true'
+  
+  kurtosis_version:
+    description: 'Version of Kurtosis CLI to use'
+    required: false
+    default: 'latest'
+
+outputs:
+  test_result:
+    description: 'Result of the sync test (success or failure)'
+    value: ${{ steps.sync-test.outputs.result }}
+  
+  test_summary:
+    description: 'Summary of test execution'
+    value: ${{ steps.sync-test.outputs.summary }}
+  
+  html_report_path:
+    description: 'Path to generated HTML report'
+    value: ${{ steps.generate-report.outputs.html_path }}
+  
+  enclave_name:
+    description: 'Name of the Kurtosis enclave used'
+    value: ${{ steps.sync-test.outputs.enclave_name }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        # Validate network
+        if [[ ! "${{ inputs.network }}" =~ ^(mainnet|sepolia|hoodi)$ ]]; then
+          echo "Error: Invalid network '${{ inputs.network }}'. Must be one of: mainnet, sepolia, hoodi"
+          exit 1
+        fi
+        
+        # Validate EL client
+        if [[ ! "${{ inputs.el_client }}" =~ ^(geth|nethermind|reth|besu|erigon)$ ]]; then
+          echo "Error: Invalid EL client '${{ inputs.el_client }}'. Must be one of: geth, nethermind, reth, besu, erigon"
+          exit 1
+        fi
+        
+        # Validate CL client
+        if [[ ! "${{ inputs.cl_client }}" =~ ^(lighthouse|teku)$ ]]; then
+          echo "Error: Invalid CL client '${{ inputs.cl_client }}'. Must be one of: lighthouse, teku"
+          exit 1
+        fi
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        # Install required tools
+        if ! command -v jq &> /dev/null; then
+          echo "Installing jq..."
+          sudo apt-get update && sudo apt-get install -y jq
+        fi
+        
+        if ! command -v yq &> /dev/null; then
+          echo "Installing yq..."
+          sudo wget -O /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+        fi
+        
+        if ! command -v curl &> /dev/null; then
+          echo "Installing curl..."
+          sudo apt-get update && sudo apt-get install -y curl
+        fi
+
+    - name: Install Kurtosis
+      shell: bash
+      run: |
+        echo "Installing Kurtosis CLI..."
+        echo "deb [trusted=yes] https://apt.fury.io/kurtosis-tech/ /" | sudo tee /etc/apt/sources.list.d/kurtosis.list
+        sudo apt update
+        if [ "${{ inputs.kurtosis_version }}" == "latest" ]; then
+          sudo apt install kurtosis-cli
+        else
+          sudo apt install kurtosis-cli=${{ inputs.kurtosis_version }}
+        fi
+        
+        # Verify installation
+        kurtosis version
+
+    - name: Determine configuration file
+      shell: bash
+      id: config
+      run: |
+        if [ -n "${{ inputs.config_file }}" ] && [ "${{ inputs.config_file }}" != "kurtosis-config.yaml" ]; then
+          config_file="${{ inputs.config_file }}"
+        else
+          # Use network-specific config if available
+          network_config="${{ inputs.network }}/${{ inputs.network }}-${{ inputs.el_client }}.yaml"
+          if [ -f "$network_config" ]; then
+            config_file="$network_config"
+          else
+            config_file="kurtosis-config.yaml"
+          fi
+        fi
+        
+        if [ ! -f "$config_file" ]; then
+          echo "Error: Configuration file '$config_file' not found"
+          exit 1
+        fi
+        
+        echo "config_file=$config_file" >> $GITHUB_OUTPUT
+        echo "Using configuration file: $config_file"
+
+    - name: Run sync test
+      shell: bash
+      id: sync-test
+      run: |
+        # Determine enclave name
+        if [ -n "${{ inputs.enclave_name }}" ]; then
+          enclave_name="${{ inputs.enclave_name }}"
+        else
+          enclave_name="sync-test-${{ inputs.network }}-${{ inputs.el_client }}-${GITHUB_RUN_ID}"
+        fi
+        
+        echo "enclave_name=$enclave_name" >> $GITHUB_OUTPUT
+        
+        # Create results directory
+        mkdir -p sync-test-results
+        
+        # Set up logging
+        exec > >(tee -a sync-test-results/test.log) 2>&1
+        
+        echo "Starting sync test with:"
+        echo "  Enclave: $enclave_name"
+        echo "  Config: ${{ steps.config.outputs.config_file }}"
+        echo "  Network: ${{ inputs.network }}"
+        echo "  EL Client: ${{ inputs.el_client }}"
+        echo "  CL Client: ${{ inputs.cl_client }}"
+        echo "  Wait Time: ${{ inputs.wait_time }}s"
+        echo
+        
+        # Run the sync test
+        start_time=$(date +%s)
+        if timeout 7200 ./synctest.sh -t ${{ inputs.wait_time }} "$enclave_name" "${{ steps.config.outputs.config_file }}"; then
+          test_result="success"
+          echo "result=success" >> $GITHUB_OUTPUT
+        else
+          test_result="failure"
+          echo "result=failure" >> $GITHUB_OUTPUT
+        fi
+        end_time=$(date +%s)
+        
+        # Calculate duration
+        duration=$((end_time - start_time))
+        
+        # Create summary
+        summary="Sync test completed in ${duration}s with result: $test_result"
+        echo "summary=$summary" >> $GITHUB_OUTPUT
+        
+        # Save test metadata
+        cat > sync-test-results/metadata.json << EOF
+        {
+          "enclave_name": "$enclave_name",
+          "config_file": "${{ steps.config.outputs.config_file }}",
+          "network": "${{ inputs.network }}",
+          "el_client": "${{ inputs.el_client }}",
+          "cl_client": "${{ inputs.cl_client }}",
+          "wait_time": ${{ inputs.wait_time }},
+          "start_time": $start_time,
+          "end_time": $end_time,
+          "duration": $duration,
+          "result": "$test_result",
+          "github_run_id": "${GITHUB_RUN_ID}",
+          "github_run_number": "${GITHUB_RUN_NUMBER}",
+          "github_sha": "${GITHUB_SHA}",
+          "github_ref": "${GITHUB_REF}"
+        }
+        EOF
+
+    - name: Cleanup Kurtosis
+      shell: bash
+      if: always()
+      run: |
+        echo "Cleaning up Kurtosis enclaves..."
+        kurtosis clean -a || true
+
+    - name: Generate HTML report
+      shell: bash
+      id: generate-report
+      if: inputs.generate_html_report == 'true'
+      run: |
+        # Create reports directory
+        mkdir -p reports
+        
+        # Generate HTML report
+        cat > reports/index.html << 'EOF'
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Kurtosis Sync Test Results</title>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background-color: #f6f8fa;
+                }
+                .container {
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    background: white;
+                    border-radius: 8px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                    padding: 30px;
+                }
+                .header {
+                    border-bottom: 1px solid #e1e4e8;
+                    padding-bottom: 20px;
+                    margin-bottom: 30px;
+                }
+                .header h1 {
+                    margin: 0;
+                    color: #24292e;
+                }
+                .header .subtitle {
+                    color: #586069;
+                    margin-top: 5px;
+                }
+                .status {
+                    display: inline-block;
+                    padding: 6px 12px;
+                    border-radius: 6px;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    font-size: 12px;
+                }
+                .status.success {
+                    background-color: #d4f4dd;
+                    color: #28a745;
+                }
+                .status.failure {
+                    background-color: #ffeaea;
+                    color: #d73a49;
+                }
+                .grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                    gap: 20px;
+                    margin-bottom: 30px;
+                }
+                .card {
+                    border: 1px solid #e1e4e8;
+                    border-radius: 6px;
+                    padding: 20px;
+                }
+                .card h3 {
+                    margin: 0 0 15px 0;
+                    color: #24292e;
+                }
+                .card .metric {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 10px;
+                }
+                .card .metric:last-child {
+                    margin-bottom: 0;
+                }
+                .metric-label {
+                    color: #586069;
+                }
+                .metric-value {
+                    font-weight: 600;
+                    color: #24292e;
+                }
+                .logs {
+                    background-color: #f6f8fa;
+                    border: 1px solid #e1e4e8;
+                    border-radius: 6px;
+                    padding: 20px;
+                    overflow-x: auto;
+                }
+                .logs pre {
+                    margin: 0;
+                    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+                    font-size: 12px;
+                    line-height: 1.45;
+                    color: #24292e;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Kurtosis Sync Test Results</h1>
+                    <div class="subtitle">Ethereum Client Synchronization Test Report</div>
+                </div>
+        EOF
+        
+        # Read metadata and generate dynamic content
+        if [ -f sync-test-results/metadata.json ]; then
+          metadata=$(cat sync-test-results/metadata.json)
+          
+          # Extract values using jq
+          result=$(echo "$metadata" | jq -r '.result')
+          network=$(echo "$metadata" | jq -r '.network')
+          el_client=$(echo "$metadata" | jq -r '.el_client')
+          cl_client=$(echo "$metadata" | jq -r '.cl_client')
+          duration=$(echo "$metadata" | jq -r '.duration')
+          enclave_name=$(echo "$metadata" | jq -r '.enclave_name')
+          github_run_id=$(echo "$metadata" | jq -r '.github_run_id')
+          start_time=$(echo "$metadata" | jq -r '.start_time')
+          
+          # Convert timestamps to readable format
+          start_date=$(date -d "@$start_time" 2>/dev/null || date -r "$start_time" 2>/dev/null || echo "N/A")
+          
+          cat >> reports/index.html << EOF
+                <div style="margin-bottom: 20px;">
+                    <span class="status $result">$result</span>
+                </div>
+                
+                <div class="grid">
+                    <div class="card">
+                        <h3>Test Configuration</h3>
+                        <div class="metric">
+                            <span class="metric-label">Network:</span>
+                            <span class="metric-value">$network</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">EL Client:</span>
+                            <span class="metric-value">$el_client</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">CL Client:</span>
+                            <span class="metric-value">$cl_client</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Enclave:</span>
+                            <span class="metric-value">$enclave_name</span>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>Test Results</h3>
+                        <div class="metric">
+                            <span class="metric-label">Status:</span>
+                            <span class="metric-value">$result</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Duration:</span>
+                            <span class="metric-value">${duration}s</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Start Time:</span>
+                            <span class="metric-value">$start_date</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Run ID:</span>
+                            <span class="metric-value">$github_run_id</span>
+                        </div>
+                    </div>
+                </div>
+        EOF
+        fi
+        
+        # Add logs section if available
+        if [ -f sync-test-results/test.log ]; then
+          cat >> reports/index.html << 'EOF'
+                <div class="card">
+                    <h3>Test Logs</h3>
+                    <div class="logs">
+                        <pre id="logs"></pre>
+                    </div>
+                </div>
+                
+                <script>
+                    // Load and display logs
+                    fetch('test.log')
+                        .then(response => response.text())
+                        .then(text => {
+                            document.getElementById('logs').textContent = text;
+                        })
+                        .catch(error => {
+                            document.getElementById('logs').textContent = 'Failed to load logs: ' + error;
+                        });
+                </script>
+        EOF
+          
+          # Copy log file to reports directory
+          cp sync-test-results/test.log reports/
+        fi
+        
+        cat >> reports/index.html << 'EOF'
+            </div>
+        </body>
+        </html>
+        EOF
+        
+        echo "html_path=reports/index.html" >> $GITHUB_OUTPUT
+        echo "Generated HTML report at reports/index.html"
+
+    - name: Upload test artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: sync-test-results-${{ github.run_number }}
+        path: |
+          sync-test-results/
+          reports/
+        retention-days: 30
+
+branding:
+  icon: 'sync'
+  color: 'blue'

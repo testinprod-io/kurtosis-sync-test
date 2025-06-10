@@ -1,0 +1,429 @@
+name: Comprehensive Sync Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_scope:
+        description: 'Scope of testing'
+        required: true
+        type: choice
+        options:
+          - all-clients
+          - single-network
+          - custom
+        default: 'all-clients'
+      
+      networks:
+        description: 'Networks to test (comma-separated for custom scope)'
+        required: false
+        type: string
+        default: 'mainnet,sepolia,hoodi'
+      
+      el_clients:
+        description: 'EL clients to test (comma-separated for custom scope)'
+        required: false
+        type: string
+        default: 'geth,nethermind,reth,besu,erigon'
+      
+      cl_clients:
+        description: 'CL clients to test (comma-separated for custom scope)'
+        required: false
+        type: string
+        default: 'lighthouse,teku'
+      
+      wait_time:
+        description: 'Wait time in seconds'
+        required: false
+        type: number
+        default: 1800
+  
+  schedule:
+    # Run comprehensive test weekly on Sundays at 3:00 AM UTC
+    - cron: '0 3 * * 0'
+
+# Allow only one concurrent deployment
+concurrency:
+  group: "comprehensive-sync-test"
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  prepare-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.combinations }}
+    
+    steps:
+      - name: Generate test matrix
+        id: matrix
+        run: |
+          # Set defaults for scheduled runs
+          if [ "${{ github.event_name }}" == "schedule" ]; then
+            NETWORKS="mainnet,sepolia,hoodi"
+            EL_CLIENTS="geth,nethermind,reth,besu,erigon"
+            CL_CLIENTS="lighthouse,teku"
+          else
+            case "${{ github.event.inputs.test_scope }}" in
+              "all-clients")
+                NETWORKS="mainnet,sepolia,hoodi"
+                EL_CLIENTS="geth,nethermind,reth,besu,erigon"
+                CL_CLIENTS="lighthouse,teku"
+                ;;
+              "single-network")
+                NETWORKS="mainnet"
+                EL_CLIENTS="geth,nethermind,reth,besu,erigon"
+                CL_CLIENTS="lighthouse,teku"
+                ;;
+              "custom")
+                NETWORKS="${{ github.event.inputs.networks }}"
+                EL_CLIENTS="${{ github.event.inputs.el_clients }}"
+                CL_CLIENTS="${{ github.event.inputs.cl_clients }}"
+                ;;
+            esac
+          fi
+          
+          # Generate matrix combinations
+          combinations="["
+          first=true
+          
+          IFS=',' read -ra NETWORK_ARRAY <<< "$NETWORKS"
+          IFS=',' read -ra EL_ARRAY <<< "$EL_CLIENTS"
+          IFS=',' read -ra CL_ARRAY <<< "$CL_CLIENTS"
+          
+          for network in "${NETWORK_ARRAY[@]}"; do
+            for el_client in "${EL_ARRAY[@]}"; do
+              for cl_client in "${CL_ARRAY[@]}"; do
+                if [ "$first" = true ]; then
+                  first=false
+                else
+                  combinations+=","
+                fi
+                combinations+="{\"network\":\"${network// /}\",\"el_client\":\"${el_client// /}\",\"cl_client\":\"${cl_client// /}\"}"
+              done
+            done
+          done
+          
+          combinations+="]"
+          
+          echo "Generated matrix: $combinations"
+          echo "combinations=$combinations" >> $GITHUB_OUTPUT
+
+  sync-test:
+    needs: prepare-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 3  # Limit concurrent tests to avoid resource issues
+      matrix:
+        include: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Run sync test
+        uses: ./
+        id: sync-test
+        with:
+          network: ${{ matrix.network }}
+          el_client: ${{ matrix.el_client }}
+          cl_client: ${{ matrix.cl_client }}
+          wait_time: ${{ github.event.inputs.wait_time || '1800' }}
+          generate_html_report: 'true'
+      
+      - name: Upload individual test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-${{ matrix.network }}-${{ matrix.el_client }}-${{ matrix.cl_client }}
+          path: |
+            sync-test-results/
+            reports/
+          retention-days: 30
+
+  generate-summary:
+    needs: [prepare-matrix, sync-test]
+    if: always()
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Download all test artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./all-results
+      
+      - name: Generate comprehensive report
+        run: |
+          mkdir -p final-report
+          
+          cat > final-report/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Comprehensive Sync Test Results</title>
+              <style>
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                      margin: 0;
+                      padding: 20px;
+                      background-color: #f6f8fa;
+                  }
+                  .container {
+                      max-width: 1400px;
+                      margin: 0 auto;
+                      background: white;
+                      border-radius: 8px;
+                      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                      padding: 30px;
+                  }
+                  .header {
+                      border-bottom: 1px solid #e1e4e8;
+                      padding-bottom: 20px;
+                      margin-bottom: 30px;
+                  }
+                  .header h1 {
+                      margin: 0;
+                      color: #24292e;
+                  }
+                  .header .subtitle {
+                      color: #586069;
+                      margin-top: 5px;
+                  }
+                  .summary-grid {
+                      display: grid;
+                      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                      gap: 15px;
+                      margin-bottom: 30px;
+                  }
+                  .summary-card {
+                      border: 1px solid #e1e4e8;
+                      border-radius: 6px;
+                      padding: 20px;
+                      text-align: center;
+                  }
+                  .summary-card h3 {
+                      margin: 0 0 10px 0;
+                      color: #24292e;
+                      font-size: 2em;
+                  }
+                  .summary-card p {
+                      margin: 0;
+                      color: #586069;
+                      font-weight: 600;
+                  }
+                  .results-table {
+                      width: 100%;
+                      border-collapse: collapse;
+                      margin-top: 20px;
+                  }
+                  .results-table th,
+                  .results-table td {
+                      padding: 12px;
+                      text-align: left;
+                      border-bottom: 1px solid #e1e4e8;
+                  }
+                  .results-table th {
+                      background-color: #f6f8fa;
+                      font-weight: 600;
+                      color: #24292e;
+                  }
+                  .status-badge {
+                      display: inline-block;
+                      padding: 4px 8px;
+                      border-radius: 4px;
+                      font-size: 12px;
+                      font-weight: 600;
+                      text-transform: uppercase;
+                  }
+                  .status-badge.success {
+                      background-color: #d4f4dd;
+                      color: #28a745;
+                  }
+                  .status-badge.failure {
+                      background-color: #ffeaea;
+                      color: #d73a49;
+                  }
+                  .status-badge.unknown {
+                      background-color: #fff3cd;
+                      color: #856404;
+                  }
+                  .timestamp {
+                      color: #586069;
+                      font-size: 0.9em;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>Comprehensive Sync Test Results</h1>
+                      <div class="subtitle">Ethereum Client Synchronization Test Report</div>
+                      <div class="timestamp">Generated: <span id="timestamp"></span></div>
+                  </div>
+          EOF
+          
+          # Process results and generate statistics
+          total_tests=0
+          successful_tests=0
+          failed_tests=0
+          
+          echo '<div class="summary-grid">' >> final-report/index.html
+          
+          # Initialize results array for the table
+          echo '<script>var testResults = [];' >> final-report/index.html
+          
+          # Process each test result
+          for test_dir in ./all-results/test-*; do
+            if [ -d "$test_dir" ]; then
+              total_tests=$((total_tests + 1))
+              
+              # Extract test info from directory name
+              test_name=$(basename "$test_dir")
+              network=$(echo "$test_name" | cut -d'-' -f2)
+              el_client=$(echo "$test_name" | cut -d'-' -f3)
+              cl_client=$(echo "$test_name" | cut -d'-' -f4)
+              
+              # Try to read metadata if available
+              if [ -f "$test_dir/sync-test-results/metadata.json" ]; then
+                metadata=$(cat "$test_dir/sync-test-results/metadata.json")
+                result=$(echo "$metadata" | jq -r '.result' 2>/dev/null || echo "unknown")
+                duration=$(echo "$metadata" | jq -r '.duration' 2>/dev/null || echo "N/A")
+                start_time=$(echo "$metadata" | jq -r '.start_time' 2>/dev/null || echo "N/A")
+              else
+                result="unknown"
+                duration="N/A"
+                start_time="N/A"
+              fi
+              
+              # Count results
+              if [ "$result" = "success" ]; then
+                successful_tests=$((successful_tests + 1))
+              elif [ "$result" = "failure" ]; then
+                failed_tests=$((failed_tests + 1))
+              fi
+              
+              # Add to JavaScript array for table
+              echo "testResults.push({" >> final-report/index.html
+              echo "  network: '$network'," >> final-report/index.html
+              echo "  elClient: '$el_client'," >> final-report/index.html
+              echo "  clClient: '$cl_client'," >> final-report/index.html
+              echo "  result: '$result'," >> final-report/index.html
+              echo "  duration: '$duration'," >> final-report/index.html
+              echo "  startTime: '$start_time'" >> final-report/index.html
+              echo "});" >> final-report/index.html
+            fi
+          done
+          
+          echo '</script>' >> final-report/index.html
+          
+          # Add summary cards
+          success_rate=0
+          if [ $total_tests -gt 0 ]; then
+            success_rate=$((successful_tests * 100 / total_tests))
+          fi
+          
+          cat >> final-report/index.html << EOF
+              <div class="summary-card">
+                  <h3>$total_tests</h3>
+                  <p>Total Tests</p>
+              </div>
+              <div class="summary-card">
+                  <h3>$successful_tests</h3>
+                  <p>Successful</p>
+              </div>
+              <div class="summary-card">
+                  <h3>$failed_tests</h3>
+                  <p>Failed</p>
+              </div>
+              <div class="summary-card">
+                  <h3>$success_rate%</h3>
+                  <p>Success Rate</p>
+              </div>
+          </div>
+          
+          <table class="results-table">
+              <thead>
+                  <tr>
+                      <th>Network</th>
+                      <th>EL Client</th>
+                      <th>CL Client</th>
+                      <th>Status</th>
+                      <th>Duration</th>
+                      <th>Start Time</th>
+                  </tr>
+              </thead>
+              <tbody id="resultsTableBody">
+              </tbody>
+          </table>
+          
+          <script>
+              // Set timestamp
+              document.getElementById('timestamp').textContent = new Date().toISOString();
+              
+              // Populate results table
+              const tbody = document.getElementById('resultsTableBody');
+              testResults.forEach(test => {
+                  const row = tbody.insertRow();
+                  row.insertCell(0).textContent = test.network;
+                  row.insertCell(1).textContent = test.elClient;
+                  row.insertCell(2).textContent = test.clClient;
+                  
+                  const statusCell = row.insertCell(3);
+                  const statusBadge = document.createElement('span');
+                  statusBadge.className = 'status-badge ' + test.result;
+                  statusBadge.textContent = test.result;
+                  statusCell.appendChild(statusBadge);
+                  
+                  row.insertCell(4).textContent = test.duration === 'N/A' ? 'N/A' : test.duration + 's';
+                  
+                  const startTimeCell = row.insertCell(5);
+                  if (test.startTime !== 'N/A' && !isNaN(test.startTime)) {
+                      startTimeCell.textContent = new Date(parseInt(test.startTime) * 1000).toLocaleString();
+                  } else {
+                      startTimeCell.textContent = 'N/A';
+                  }
+              });
+          </script>
+          
+          </div>
+          </body>
+          </html>
+          EOF
+          
+          echo "Generated comprehensive report with $total_tests total tests"
+      
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      
+      - name: Upload to Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: final-report/
+      
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+      
+      - name: Create summary
+        run: |
+          echo "## Comprehensive Sync Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Report URL:** ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          total_tests=$(find ./all-results -name "test-*" -type d | wc -l)
+          echo "**Total Tests:** $total_tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Detailed results are available in the GitHub Pages report above." >> $GITHUB_STEP_SUMMARY

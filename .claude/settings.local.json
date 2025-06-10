@@ -4,7 +4,9 @@
       "Bash(mkdir:*)",
       "Bash(chmod:*)",
       "Bash(grep:*)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": []
   }
