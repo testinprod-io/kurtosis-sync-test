@@ -1,0 +1,24 @@
+---
+description: kurtosis_sync_test - Ansible role for deploying sync test service with systemd integration
+globs: 
+  - "*.yml"
+  - "*.j2"
+  - "handlers/*.yml"
+  - "tasks/*.yml"
+  - "templates/*.j2"
+alwaysApply: false
+---
+
+# kurtosis_sync_test Role
+
+Ansible role that deploys the kurtosis-sync-test oneliner.sh script as a managed systemd service.
+
+## Key Integration Pattern
+- Deploys from parent directory structure preserving network configurations
+- Uses template-based environment variables for VictoriaMetrics authentication
+- Follows standard Ansible role directory structure (tasks, handlers, templates)
+
+## Important Constraints
+- Must copy oneliner.sh and network configs from parent project directory
+- Service configuration stored in /etc/kurtosis-sync/env with restricted permissions (0600)
+- Requires pre-configured VictoriaMetrics credentials in group_vars

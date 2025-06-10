@@ -1,0 +1,184 @@
+---
+description: Code standards and conventions for kurtosis-sync-test
+globs:
+  - "**/*.sh"
+  - "**/*.yaml"
+  - "**/*.yml"
+  - "**/Makefile"
+  - "ansible/**/*"
+alwaysApply: false
+---
+
+# Code Standards
+
+## Shell Script Standards
+
+### General Conventions
+- Use `#!/bin/bash` shebang for all scripts
+- Set `set -euo pipefail` for strict error handling
+- Use 4-space indentation (no tabs)
+- Line length should not exceed 120 characters
+- Always quote variables: `"${variable}"` not `$variable`
+
+### Variable Naming
+- Environment variables: `UPPER_SNAKE_CASE`
+- Local variables: `lower_snake_case`
+- Constants: `UPPER_SNAKE_CASE`
+- Function names: `lower_snake_case`
+
+### Function Patterns
+```bash
+# Function documentation
+function_name() {
+    local param1="${1}"
+    local param2="${2:-default_value}"
+    
+    # Function body
+}
+```
+
+### Error Handling
+- Use meaningful exit codes (1-255)
+- Always check command return values
+- Provide clear error messages to stderr
+- Use trap for cleanup operations
+
+### Script Structure
+1. Shebang and set options
+2. Script documentation comment block
+3. Global variables and constants
+4. Function definitions
+5. Main execution logic
+6. Script invocation check
+
+## YAML Standards
+
+### General Rules
+- Use 2-space indentation
+- No tabs allowed
+- Use `---` document separator
+- Prefer explicit typing over implicit
+
+### Kurtosis Configuration
+- Client configurations must specify:
+  - `network` (mainnet/sepolia/hoodi)
+  - `participants` array with EL/CL pairs
+  - `additional_services` as needed
+
+### Ansible Standards
+- Tasks must have descriptive names
+- Use `become: true` only when necessary
+- Handler names should be action-oriented
+- Templates use `.j2` extension
+
+## Documentation Standards
+
+### Script Documentation
+```bash
+#!/bin/bash
+#
+# Script: script_name.sh
+# Description: Brief description of what the script does
+# Usage: script_name.sh [options]
+# Options:
+#   -h, --help    Show this help message
+#   -t, --time    Set wait time in seconds
+#
+```
+
+### Inline Comments
+- Explain "why" not "what"
+- Place comments above the code they describe
+- Use complete sentences with proper capitalization
+
+### Function Documentation
+```bash
+# Validates sync status for a given client pair
+# Arguments:
+#   $1 - Client name
+#   $2 - Expected status
+# Returns:
+#   0 on success, 1 on failure
+validate_sync_status() {
+    # Implementation
+}
+```
+
+## File Organization
+
+### Directory Structure
+- Network-specific configs in dedicated directories
+- Reusable functions in separate source files
+- Keep scripts focused on single responsibilities
+
+### File Naming
+- Shell scripts: `lowercase_with_underscores.sh`
+- YAML configs: `{network}-{client}.yaml`
+- Ansible files: Follow Ansible conventions
+
+## Configuration Standards
+
+### Environment Variables
+- Document all required environment variables
+- Provide sensible defaults where appropriate
+- Validate critical variables before use
+
+### YAML Configuration
+- Use anchors and aliases to reduce duplication
+- Keep configurations DRY (Don't Repeat Yourself)
+- Group related settings together
+
+## Testing Standards
+
+### Script Testing
+- Test all code paths
+- Verify error handling
+- Check edge cases
+- Use shellcheck for static analysis
+
+### Configuration Validation
+- Validate YAML syntax before deployment
+- Test configurations in isolated environments
+- Verify all required fields are present
+
+## Security Standards
+
+### Credentials
+- Never hardcode credentials
+- Use environment variables or secure vaults
+- Document required permissions clearly
+
+### Input Validation
+- Sanitize all user inputs
+- Validate file paths and URLs
+- Use proper quoting to prevent injection
+
+## Logging Standards
+
+### Log Levels
+- INFO: Normal operational messages
+- WARN: Warning conditions
+- ERROR: Error conditions
+- DEBUG: Detailed diagnostic information
+
+### Log Format
+```bash
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] [LEVEL] Message" >&2
+```
+
+### Output Handling
+- Informational messages to stderr
+- Data output to stdout
+- Use consistent formatting
+
+## Metrics Standards
+
+### Naming Convention
+- Use descriptive metric names
+- Include units in metric names
+- Follow Prometheus naming conventions
+
+### Data Collection
+- Timestamp all metrics
+- Include relevant labels/tags
+- Ensure atomic metric updates
