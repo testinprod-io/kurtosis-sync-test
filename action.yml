@@ -14,7 +14,7 @@ inputs:
     default: 'kurtosis-config.yaml'
   
   network:
-    description: 'Network to test (mainnet, sepolia, hoodi)'
+    description: 'Network to test (any network name)'
     required: false
     default: 'mainnet'
   
@@ -65,13 +65,7 @@ runs:
   steps:
     - name: Validate inputs
       shell: bash
-      run: |
-        # Validate network
-        if [[ ! "${{ inputs.network }}" =~ ^(mainnet|sepolia|hoodi)$ ]]; then
-          echo "Error: Invalid network '${{ inputs.network }}'. Must be one of: mainnet, sepolia, hoodi"
-          exit 1
-        fi
-        
+      run: |        
         # Validate EL client
         if [[ ! "${{ inputs.el_client }}" =~ ^(geth|nethermind|reth|besu|erigon)$ ]]; then
           echo "Error: Invalid EL client '${{ inputs.el_client }}'. Must be one of: geth, nethermind, reth, besu, erigon"
@@ -103,6 +97,11 @@ runs:
           echo "Installing curl..."
           sudo apt-get update && sudo apt-get install -y curl
         fi
+        
+        if ! command -v envsubst &> /dev/null; then
+          echo "Installing gettext-base for envsubst..."
+          sudo apt-get update && sudo apt-get install -y gettext-base
+        fi
 
     - name: Install Kurtosis
       shell: bash
@@ -133,6 +132,41 @@ runs:
           else
             config_file="kurtosis-config.yaml"
           fi
+        fi
+        
+        # Check if using devnet template
+        if [ "$config_file" = "devnet-templates/devnet-template.yaml" ]; then
+          # Create a temporary config file with substituted values
+          temp_config="/tmp/devnet-config-${GITHUB_RUN_ID}.yaml"
+          
+          # Set default values for template variables
+          export EL_CLIENT_TYPE="${{ inputs.el_client }}"
+          export CL_CLIENT_TYPE="${{ inputs.cl_client }}"
+          export DEVNET="${{ inputs.network }}"
+          export NAT_EXIT_IP="127.0.0.1"
+          export CHECKPOINT_SYNC="true"
+          
+          # Get default images based on client type
+          case "${{ inputs.el_client }}" in
+            "geth") export EL_CLIENT_IMAGE="ethereum/client-go:stable" ;;
+            "nethermind") export EL_CLIENT_IMAGE="nethermind/nethermind:latest" ;;
+            "reth") export EL_CLIENT_IMAGE="ghcr.io/paradigmxyz/reth:latest" ;;
+            "besu") export EL_CLIENT_IMAGE="hyperledger/besu:latest" ;;
+            "erigon") export EL_CLIENT_IMAGE="thorax/erigon:devel" ;;
+          esac
+          
+          case "${{ inputs.cl_client }}" in
+            "lighthouse") export CL_CLIENT_IMAGE="sigp/lighthouse:latest" ;;
+            "teku") export CL_CLIENT_IMAGE="consensys/teku:latest" ;;
+            "prysm") export CL_CLIENT_IMAGE="gcr.io/prysmaticlabs/prysm/beacon-chain:stable" ;;
+            "nimbus") export CL_CLIENT_IMAGE="statusim/nimbus-eth2:multiarch-latest" ;;
+            "lodestar") export CL_CLIENT_IMAGE="chainsafe/lodestar:next" ;;
+            "grandine") export CL_CLIENT_IMAGE="sifrai/grandine:develop" ;;
+          esac
+          
+          # Substitute variables in template
+          envsubst < "$config_file" > "$temp_config"
+          config_file="$temp_config"
         fi
         
         if [ ! -f "$config_file" ]; then

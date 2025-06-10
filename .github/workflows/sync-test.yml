@@ -8,10 +8,11 @@ on:
         required: true
         type: choice
         options:
+          - fusaka-devnet-1
           - mainnet
           - sepolia
           - hoodi
-        default: 'mainnet'
+        default: 'fusaka-devnet-1'
       
       el_client:
         description: 'Execution layer client'
@@ -71,16 +72,16 @@ jobs:
       matrix:
         include:
           # For scheduled runs, test multiple combinations
-          - network: mainnet
+          - network: fusaka-devnet-1
             el_client: geth
             cl_client: lighthouse
-          - network: mainnet
+          - network: fusaka-devnet-1
             el_client: nethermind
             cl_client: teku
-          - network: sepolia
+          - network: fusaka-devnet-1
             el_client: reth
             cl_client: lighthouse
-          - network: hoodi
+          - network: fusaka-devnet-1
             el_client: besu
             cl_client: teku
     
@@ -115,6 +116,7 @@ jobs:
           wait_time: ${{ steps.matrix.outputs.wait_time }}
           enclave_name: ${{ steps.matrix.outputs.enclave_name }}
           generate_html_report: 'true'
+          config_file: ${{ steps.matrix.outputs.network == 'fusaka-devnet-1' && 'devnet-templates/devnet-template.yaml' || '' }}
       
       - name: Upload to Pages (for matrix builds)
         if: github.event_name == 'schedule'

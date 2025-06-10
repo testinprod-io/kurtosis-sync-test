@@ -9,15 +9,8 @@ on:
         type: choice
         options:
           - all-clients
-          - single-network
           - custom
         default: 'all-clients'
-      
-      networks:
-        description: 'Networks to test (comma-separated for custom scope)'
-        required: false
-        type: string
-        default: 'mainnet,sepolia,hoodi'
       
       el_clients:
         description: 'EL clients to test (comma-separated for custom scope)'
@@ -63,23 +56,18 @@ jobs:
         run: |
           # Set defaults for scheduled runs
           if [ "${{ github.event_name }}" == "schedule" ]; then
-            NETWORKS="mainnet,sepolia,hoodi"
+            NETWORKS="fusaka-devnet-1"
             EL_CLIENTS="geth,nethermind,reth,besu,erigon"
             CL_CLIENTS="lighthouse,teku,prysm,nimbus,lodestar,grandine"
           else
             case "${{ github.event.inputs.test_scope }}" in
               "all-clients")
-                NETWORKS="mainnet,sepolia,hoodi"
-                EL_CLIENTS="geth,nethermind,reth,besu,erigon"
-                CL_CLIENTS="lighthouse,teku,prysm,nimbus,lodestar,grandine"
-                ;;
-              "single-network")
-                NETWORKS="mainnet"
+                NETWORKS="fusaka-devnet-1"
                 EL_CLIENTS="geth,nethermind,reth,besu,erigon"
                 CL_CLIENTS="lighthouse,teku,prysm,nimbus,lodestar,grandine"
                 ;;
               "custom")
-                NETWORKS="${{ github.event.inputs.networks }}"
+                NETWORKS="fusaka-devnet-1"
                 EL_CLIENTS="${{ github.event.inputs.el_clients }}"
                 CL_CLIENTS="${{ github.event.inputs.cl_clients }}"
                 ;;
@@ -134,6 +122,7 @@ jobs:
           cl_client: ${{ matrix.cl_client }}
           wait_time: ${{ github.event.inputs.wait_time || '1800' }}
           generate_html_report: 'true'
+          config_file: 'devnet-templates/devnet-template.yaml'
       
       - name: Upload individual test results
         uses: actions/upload-artifact@v4

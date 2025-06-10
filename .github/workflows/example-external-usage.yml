@@ -23,19 +23,21 @@ jobs:
       - name: Basic sync test
         uses: ethpandaops/kurtosis-sync-test@main
         with:
-          network: mainnet
+          network: fusaka-devnet-1
           el_client: geth
           cl_client: lighthouse
+          config_file: devnet-templates/devnet-template.yaml
       
       # Example 2: Custom configuration
       - name: Custom sync test
         uses: ethpandaops/kurtosis-sync-test@main
         with:
           enclave_name: my-custom-test
-          network: sepolia
+          network: fusaka-devnet-1
           el_client: nethermind
           cl_client: teku
           wait_time: 3600
+          config_file: devnet-templates/devnet-template.yaml
   
   matrix-example:
     if: github.event.inputs.enable_example == 'true'
@@ -44,10 +46,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - network: mainnet
+          - network: fusaka-devnet-1
             el_client: geth
             cl_client: lighthouse
-          - network: sepolia
+          - network: fusaka-devnet-1
             el_client: reth
             cl_client: prysm
     
@@ -58,6 +60,7 @@ jobs:
           network: ${{ matrix.network }}
           el_client: ${{ matrix.el_client }}
           cl_client: ${{ matrix.cl_client }}
+          config_file: devnet-templates/devnet-template.yaml
 
   pages-example:
     if: github.event.inputs.enable_example == 'true'
@@ -75,10 +78,11 @@ jobs:
         uses: ethpandaops/kurtosis-sync-test@main
         id: sync-test
         with:
-          network: mainnet
+          network: fusaka-devnet-1
           el_client: geth
           cl_client: lighthouse
           generate_html_report: 'true'
+          config_file: devnet-templates/devnet-template.yaml
       
       - name: Setup Pages
         uses: actions/configure-pages@v5
