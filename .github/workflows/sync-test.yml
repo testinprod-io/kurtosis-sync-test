@@ -70,20 +70,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # For scheduled runs, test multiple combinations
-          - network: fusaka-devnet-1
-            el_client: geth
-            cl_client: lighthouse
-          - network: fusaka-devnet-1
-            el_client: nethermind
-            cl_client: teku
-          - network: fusaka-devnet-1
-            el_client: reth
-            cl_client: lighthouse
-          - network: fusaka-devnet-1
-            el_client: besu
-            cl_client: teku
+        include: ${{ fromJson(github.event_name == 'workflow_dispatch' && '[{"network":"manual","el_client":"manual","cl_client":"manual"}]' || '[{"network":"fusaka-devnet-1","el_client":"geth","cl_client":"lighthouse"},{"network":"fusaka-devnet-1","el_client":"nethermind","cl_client":"teku"},{"network":"fusaka-devnet-1","el_client":"reth","cl_client":"lighthouse"},{"network":"fusaka-devnet-1","el_client":"besu","cl_client":"teku"}]') }}
     
     steps:
       - name: Checkout repository
