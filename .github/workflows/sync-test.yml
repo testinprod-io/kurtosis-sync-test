@@ -115,7 +115,7 @@ jobs:
           wait_time: ${{ steps.matrix.outputs.wait_time }}
           enclave_name: ${{ steps.matrix.outputs.enclave_name }}
           generate_html_report: 'false'
-          save_to_data_branch: 'true'
+          save_to_data_branch: 'true'  # Always save results
           config_file: ${{ steps.matrix.outputs.network == 'fusaka-devnet-1' && 'devnet-templates/devnet-template.yaml' || '' }}
       
       

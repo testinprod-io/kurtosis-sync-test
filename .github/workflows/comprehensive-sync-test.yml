@@ -121,7 +121,7 @@ jobs:
           cl_client: ${{ matrix.cl_client }}
           wait_time: ${{ github.event.inputs.wait_time || '1800' }}
           generate_html_report: 'false'
-          save_to_data_branch: 'true'
+          save_to_data_branch: 'true'  # Always save results
           config_file: 'devnet-templates/devnet-template.yaml'
       
       - name: Upload individual test results

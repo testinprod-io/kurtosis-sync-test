@@ -41,7 +41,7 @@ inputs:
   save_to_data_branch:
     description: 'Whether to save results to data branch (requires GITHUB_TOKEN)'
     required: false
-    default: 'false'
+    default: 'true'
   
   kurtosis_version:
     description: 'Version of Kurtosis CLI to use'
