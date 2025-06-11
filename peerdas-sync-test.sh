@@ -631,7 +631,7 @@ generate_report() {
         esac
         
         # Print formatted row for this client
-        printf "%-20s | %-8b | %-10s | %s\n" "$client" "$status_colored" "$time" "$notes"
+        printf "%-20s | %-8s | %-10s | %s\n" "$client" "$status_colored" "$time" "$notes"
         
         # If test failed and we have a log path, show it
         if [[ "$status" != "Success" && -n "$log_path" ]]; then
