@@ -40,9 +40,8 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
+  pull-requests: write
 
 jobs:
   prepare-matrix:
@@ -121,7 +120,8 @@ jobs:
           el_client: ${{ matrix.el_client }}
           cl_client: ${{ matrix.cl_client }}
           wait_time: ${{ github.event.inputs.wait_time || '1800' }}
-          generate_html_report: 'true'
+          generate_html_report: 'false'
+          save_to_data_branch: 'true'  # Always save results
           config_file: 'devnet-templates/devnet-template.yaml'
       
       - name: Upload individual test results
@@ -138,281 +138,87 @@ jobs:
     needs: [prepare-matrix, sync-test]
     if: always()
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
       - name: Download all test artifacts
         uses: actions/download-artifact@v4
         with:
           path: ./all-results
       
-      - name: Generate comprehensive report
+      - name: Generate test summary
         run: |
-          mkdir -p final-report
-          
-          cat > final-report/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>Comprehensive Sync Test Results</title>
-              <style>
-                  body {
-                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                      margin: 0;
-                      padding: 20px;
-                      background-color: #f6f8fa;
-                  }
-                  .container {
-                      max-width: 1400px;
-                      margin: 0 auto;
-                      background: white;
-                      border-radius: 8px;
-                      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                      padding: 30px;
-                  }
-                  .header {
-                      border-bottom: 1px solid #e1e4e8;
-                      padding-bottom: 20px;
-                      margin-bottom: 30px;
-                  }
-                  .header h1 {
-                      margin: 0;
-                      color: #24292e;
-                  }
-                  .header .subtitle {
-                      color: #586069;
-                      margin-top: 5px;
-                  }
-                  .summary-grid {
-                      display: grid;
-                      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                      gap: 15px;
-                      margin-bottom: 30px;
-                  }
-                  .summary-card {
-                      border: 1px solid #e1e4e8;
-                      border-radius: 6px;
-                      padding: 20px;
-                      text-align: center;
-                  }
-                  .summary-card h3 {
-                      margin: 0 0 10px 0;
-                      color: #24292e;
-                      font-size: 2em;
-                  }
-                  .summary-card p {
-                      margin: 0;
-                      color: #586069;
-                      font-weight: 600;
-                  }
-                  .results-table {
-                      width: 100%;
-                      border-collapse: collapse;
-                      margin-top: 20px;
-                  }
-                  .results-table th,
-                  .results-table td {
-                      padding: 12px;
-                      text-align: left;
-                      border-bottom: 1px solid #e1e4e8;
-                  }
-                  .results-table th {
-                      background-color: #f6f8fa;
-                      font-weight: 600;
-                      color: #24292e;
-                  }
-                  .status-badge {
-                      display: inline-block;
-                      padding: 4px 8px;
-                      border-radius: 4px;
-                      font-size: 12px;
-                      font-weight: 600;
-                      text-transform: uppercase;
-                  }
-                  .status-badge.success {
-                      background-color: #d4f4dd;
-                      color: #28a745;
-                  }
-                  .status-badge.failure {
-                      background-color: #ffeaea;
-                      color: #d73a49;
-                  }
-                  .status-badge.unknown {
-                      background-color: #fff3cd;
-                      color: #856404;
-                  }
-                  .timestamp {
-                      color: #586069;
-                      font-size: 0.9em;
-                  }
-              </style>
-          </head>
-          <body>
-              <div class="container">
-                  <div class="header">
-                      <h1>Comprehensive Sync Test Results</h1>
-                      <div class="subtitle">Ethereum Client Synchronization Test Report</div>
-                      <div class="timestamp">Generated: <span id="timestamp"></span></div>
-                  </div>
-          EOF
+          echo "## Comprehensive Sync Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           
           # Process results and generate statistics
           total_tests=0
           successful_tests=0
           failed_tests=0
           
-          echo '<div class="summary-grid">' >> final-report/index.html
-          
-          # Initialize results array for the table
-          echo '<script>var testResults = [];' >> final-report/index.html
-          
           # Process each test result
           for test_dir in ./all-results/test-*; do
             if [ -d "$test_dir" ]; then
               total_tests=$((total_tests + 1))
               
-              # Extract test info from directory name
-              test_name=$(basename "$test_dir")
-              network=$(echo "$test_name" | cut -d'-' -f2)
-              el_client=$(echo "$test_name" | cut -d'-' -f3)
-              cl_client=$(echo "$test_name" | cut -d'-' -f4)
-              
               # Try to read metadata if available
               if [ -f "$test_dir/sync-test-results/metadata.json" ]; then
                 metadata=$(cat "$test_dir/sync-test-results/metadata.json")
                 result=$(echo "$metadata" | jq -r '.result' 2>/dev/null || echo "unknown")
-                duration=$(echo "$metadata" | jq -r '.duration' 2>/dev/null || echo "N/A")
-                start_time=$(echo "$metadata" | jq -r '.start_time' 2>/dev/null || echo "N/A")
-              else
-                result="unknown"
-                duration="N/A"
-                start_time="N/A"
+                
+                # Count results
+                if [ "$result" = "success" ]; then
+                  successful_tests=$((successful_tests + 1))
+                elif [ "$result" = "failure" ]; then
+                  failed_tests=$((failed_tests + 1))
+                fi
               fi
-              
-              # Count results
-              if [ "$result" = "success" ]; then
-                successful_tests=$((successful_tests + 1))
-              elif [ "$result" = "failure" ]; then
-                failed_tests=$((failed_tests + 1))
-              fi
-              
-              # Add to JavaScript array for table
-              echo "testResults.push({" >> final-report/index.html
-              echo "  network: '$network'," >> final-report/index.html
-              echo "  elClient: '$el_client'," >> final-report/index.html
-              echo "  clClient: '$cl_client'," >> final-report/index.html
-              echo "  result: '$result'," >> final-report/index.html
-              echo "  duration: '$duration'," >> final-report/index.html
-              echo "  startTime: '$start_time'" >> final-report/index.html
-              echo "});" >> final-report/index.html
             fi
           done
           
-          echo '</script>' >> final-report/index.html
-          
-          # Add summary cards
+          # Calculate success rate
           success_rate=0
           if [ $total_tests -gt 0 ]; then
             success_rate=$((successful_tests * 100 / total_tests))
           fi
           
-          cat >> final-report/index.html << EOF
-              <div class="summary-card">
-                  <h3>$total_tests</h3>
-                  <p>Total Tests</p>
-              </div>
-              <div class="summary-card">
-                  <h3>$successful_tests</h3>
-                  <p>Successful</p>
-              </div>
-              <div class="summary-card">
-                  <h3>$failed_tests</h3>
-                  <p>Failed</p>
-              </div>
-              <div class="summary-card">
-                  <h3>$success_rate%</h3>
-                  <p>Success Rate</p>
-              </div>
-          </div>
-          
-          <table class="results-table">
-              <thead>
-                  <tr>
-                      <th>Network</th>
-                      <th>EL Client</th>
-                      <th>CL Client</th>
-                      <th>Status</th>
-                      <th>Duration</th>
-                      <th>Start Time</th>
-                  </tr>
-              </thead>
-              <tbody id="resultsTableBody">
-              </tbody>
-          </table>
-          
-          <script>
-              // Set timestamp
-              document.getElementById('timestamp').textContent = new Date().toISOString();
-              
-              // Populate results table
-              const tbody = document.getElementById('resultsTableBody');
-              testResults.forEach(test => {
-                  const row = tbody.insertRow();
-                  row.insertCell(0).textContent = test.network;
-                  row.insertCell(1).textContent = test.elClient;
-                  row.insertCell(2).textContent = test.clClient;
-                  
-                  const statusCell = row.insertCell(3);
-                  const statusBadge = document.createElement('span');
-                  statusBadge.className = 'status-badge ' + test.result;
-                  statusBadge.textContent = test.result;
-                  statusCell.appendChild(statusBadge);
-                  
-                  row.insertCell(4).textContent = test.duration === 'N/A' ? 'N/A' : test.duration + 's';
-                  
-                  const startTimeCell = row.insertCell(5);
-                  if (test.startTime !== 'N/A' && !isNaN(test.startTime)) {
-                      startTimeCell.textContent = new Date(parseInt(test.startTime) * 1000).toLocaleString();
-                  } else {
-                      startTimeCell.textContent = 'N/A';
-                  }
-              });
-          </script>
-          
-          </div>
-          </body>
-          </html>
-          EOF
-          
-          echo "Generated comprehensive report with $total_tests total tests"
-      
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      
-      - name: Upload to Pages
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: final-report/
-      
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-      
-      - name: Create summary
-        run: |
-          echo "## Comprehensive Sync Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Report URL:** ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          total_tests=$(find ./all-results -name "test-*" -type d | wc -l)
           echo "**Total Tests:** $total_tests" >> $GITHUB_STEP_SUMMARY
+          echo "**Successful:** $successful_tests" >> $GITHUB_STEP_SUMMARY
+          echo "**Failed:** $failed_tests" >> $GITHUB_STEP_SUMMARY
+          echo "**Success Rate:** $success_rate%" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Detailed results are available in the GitHub Pages report above." >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Network | EL Client | CL Client | Status | Duration |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-----------|-----------|---------|----------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Generate table rows
+          for test_dir in ./all-results/test-*; do
+            if [ -d "$test_dir" ]; then
+              test_name=$(basename "$test_dir")
+              network=$(echo "$test_name" | cut -d'-' -f2)
+              el_client=$(echo "$test_name" | cut -d'-' -f3)
+              cl_client=$(echo "$test_name" | cut -d'-' -f4)
+              
+              if [ -f "$test_dir/sync-test-results/metadata.json" ]; then
+                metadata=$(cat "$test_dir/sync-test-results/metadata.json")
+                result=$(echo "$metadata" | jq -r '.result' 2>/dev/null || echo "unknown")
+                duration=$(echo "$metadata" | jq -r '.duration' 2>/dev/null || echo "N/A")
+                
+                # Format result with emoji
+                if [ "$result" = "success" ]; then
+                  result_display="✅ Success"
+                elif [ "$result" = "failure" ]; then
+                  result_display="❌ Failure"
+                else
+                  result_display="❓ Unknown"
+                fi
+                
+                echo "| $network | $el_client | $cl_client | $result_display | ${duration}s |" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "| $network | $el_client | $cl_client | ❓ Unknown | N/A |" >> $GITHUB_STEP_SUMMARY
+              fi
+            fi
+          done
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View historical results at: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> $GITHUB_STEP_SUMMARY
