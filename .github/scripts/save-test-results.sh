@@ -116,7 +116,7 @@ jq --arg date "$DATE" --arg network "$NETWORK" --arg updated "$(date -u +%Y-%m-%
     if (.dates | map(select(.date == $date and .network == $network)) | length) == 0 then
         .dates += [{date: $date, network: $network}]
     else . end |
-    .dates |= sort_by(.date) | reverse
+    .dates = (.dates | sort_by(.date) | reverse)
 ' "$CATALOG_FILE" > "${CATALOG_FILE}.tmp"
 mv "${CATALOG_FILE}.tmp" "$CATALOG_FILE"
 
