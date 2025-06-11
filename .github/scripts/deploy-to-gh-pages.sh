@@ -18,9 +18,9 @@ echo "Run ID: $RUN_ID"
 echo "Run Type: $RUN_TYPE"
 echo "Report Path: $REPORT_PATH"
 
-# Configure git
-git config --local user.email "action@github.com"
-git config --local user.name "GitHub Action"
+# Configure git with GitHub Actions identity
+git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+git config --local user.name "github-actions[bot]"
 
 # Create a temporary directory for gh-pages work
 TEMP_DIR=$(mktemp -d)

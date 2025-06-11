@@ -35,9 +35,9 @@ FILEPATH="results/${DATE}/${NETWORK}/${FILENAME}"
 
 echo "Will save to: $FILEPATH"
 
-# Configure git
-git config --local user.email "action@github.com"
-git config --local user.name "GitHub Action"
+# Configure git with GitHub Actions identity
+git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+git config --global user.name "github-actions[bot]"
 
 # Create a temporary directory for data branch work
 TEMP_DIR=$(mktemp -d)

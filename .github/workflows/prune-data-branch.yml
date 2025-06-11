@@ -35,9 +35,9 @@ jobs:
           CUTOFF_DATE=$(date -d "$DAYS_TO_KEEP days ago" +%Y-%m-%d)
           echo "Removing data older than $CUTOFF_DATE"
           
-          # Configure git
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          # Configure git with GitHub Actions identity
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
           
           # Find and remove old data directories
           removed_count=0
