@@ -16,7 +16,7 @@ inputs:
   network:
     description: 'Network to test (any network name)'
     required: false
-    default: 'mainnet'
+    default: 'hoodi'
   
   el_client:
     description: 'Execution layer client (geth, nethermind, reth, besu, erigon)'
