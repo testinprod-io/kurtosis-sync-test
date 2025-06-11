@@ -49,7 +49,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -139,12 +139,50 @@ jobs:
           
           echo "Running: $CMD"
           
+          # Create sync-test-results directory for compatibility with our save script
+          mkdir -p sync-test-results
+          
+          # Record start time
+          start_time=$(date +%s)
+          
           # Run test and capture result
           if $CMD; then
+            result="success"
             echo "result=success" >> $GITHUB_OUTPUT
           else
+            result="failure"
             echo "result=failure" >> $GITHUB_OUTPUT
           fi
+          
+          # Record end time and calculate duration
+          end_time=$(date +%s)
+          duration=$((end_time - start_time))
+          
+          # Create metadata JSON for compatibility with our save system
+          cat > sync-test-results/metadata.json << EOF
+          {
+            "result": "$result",
+            "network": "${{ github.event.inputs.devnet }}",
+            "el_client": "${{ github.event.inputs.el_client }}",
+            "cl_client": "${{ matrix.cl_client }}",
+            "start_time": $start_time,
+            "end_time": $end_time,
+            "duration": $duration,
+            "test_type": "peerdas",
+            "genesis_sync": "${{ github.event.inputs.genesis_sync }}",
+            "enclave_name": "peerdas-sync-${{ matrix.cl_client }}-$(date +%s)",
+            "github_run_id": "${{ github.run_id }}",
+            "github_run_number": "${{ github.run_number }}"
+          }
+          EOF
+      
+      - name: Save results to data branch
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # Run our save script to store results in data branch
+          bash .github/scripts/save-test-results.sh
       
       - name: Upload test logs
         uses: actions/upload-artifact@v4
@@ -163,6 +201,8 @@ jobs:
           echo "**CL Client:** ${{ matrix.cl_client }}" >> $GITHUB_STEP_SUMMARY
           echo "**Result:** ${{ steps.sync-test.outputs.result }}" >> $GITHUB_STEP_SUMMARY
           echo "**Genesis Sync:** ${{ github.event.inputs.genesis_sync }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View historical results at: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> $GITHUB_STEP_SUMMARY
 
   # Third job: Aggregate results
   aggregate-results:

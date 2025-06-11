@@ -44,7 +44,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -109,7 +109,8 @@ jobs:
           cl_client: ${{ matrix.cl_client }}
           wait_time: ${{ github.event.inputs.wait_time }}
           enclave_name: sync-${{ github.event.inputs.network }}-${{ github.event.inputs.el_client }}-${{ matrix.cl_client }}-${{ github.run_number }}
-          generate_html_report: 'true'
+          generate_html_report: 'false'
+          save_to_data_branch: 'true'
           config_file: ${{ github.event.inputs.network == 'fusaka-devnet-1' && 'devnet-templates/devnet-template.yaml' || '' }}
       
       - name: Upload test results
@@ -132,6 +133,8 @@ jobs:
           echo "**Result:** ${{ steps.sync-test.outputs.test_result }}" >> $GITHUB_STEP_SUMMARY
           echo "**Summary:** ${{ steps.sync-test.outputs.test_summary }}" >> $GITHUB_STEP_SUMMARY
           echo "**Enclave:** ${{ steps.sync-test.outputs.enclave_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View historical results at: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> $GITHUB_STEP_SUMMARY
 
   # Third job: Aggregate results and deploy to Pages
   aggregate-and-deploy:
