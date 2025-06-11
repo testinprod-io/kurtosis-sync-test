@@ -1,0 +1,322 @@
+name: Sync Test Matrix
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: 'Network to test'
+        required: true
+        type: choice
+        options:
+          - fusaka-devnet-1
+          - mainnet
+          - sepolia
+          - hoodi
+        default: 'fusaka-devnet-1'
+      
+      el_client:
+        description: 'Execution layer client'
+        required: true
+        type: choice
+        options:
+          - geth
+          - nethermind
+          - reth
+          - besu
+          - erigon
+        default: 'geth'
+      
+      cl_clients:
+        description: 'Comma-separated list of CL clients to test (e.g., lighthouse,teku,prysm)'
+        required: true
+        type: string
+        default: 'lighthouse,teku'
+      
+      wait_time:
+        description: 'Wait time in seconds before restarting clients'
+        required: false
+        type: number
+        default: 1800
+
+# Allow only one concurrent deployment per network
+concurrency:
+  group: "sync-test-${{ github.event.inputs.network }}"
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  # First job: Parse the CL clients input and create a matrix
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Parse CL clients and create matrix
+        id: set-matrix
+        run: |
+          # Parse comma-separated CL clients
+          CL_CLIENTS="${{ github.event.inputs.cl_clients }}"
+          
+          # Convert to JSON array
+          MATRIX_JSON='{"cl_client":['
+          FIRST=true
+          
+          IFS=',' read -ra CLIENTS <<< "$CL_CLIENTS"
+          for client in "${CLIENTS[@]}"; do
+            # Trim whitespace
+            client=$(echo "$client" | xargs)
+            
+            # Validate client
+            if [[ "$client" =~ ^(lighthouse|teku|prysm|nimbus|lodestar|grandine)$ ]]; then
+              if [ "$FIRST" = true ]; then
+                FIRST=false
+              else
+                MATRIX_JSON+=','
+              fi
+              MATRIX_JSON+="\"$client\""
+            else
+              echo "Warning: Skipping invalid client '$client'"
+            fi
+          done
+          
+          MATRIX_JSON+=']}'
+          
+          echo "Generated matrix: $MATRIX_JSON"
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
+  # Second job: Run sync tests for each CL client
+  sync-test:
+    needs: setup-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Run sync test
+        uses: ./
+        id: sync-test
+        with:
+          network: ${{ github.event.inputs.network }}
+          el_client: ${{ github.event.inputs.el_client }}
+          cl_client: ${{ matrix.cl_client }}
+          wait_time: ${{ github.event.inputs.wait_time }}
+          enclave_name: sync-${{ github.event.inputs.network }}-${{ github.event.inputs.el_client }}-${{ matrix.cl_client }}-${{ github.run_number }}
+          generate_html_report: 'true'
+          config_file: ${{ github.event.inputs.network == 'fusaka-devnet-1' && 'devnet-templates/devnet-template.yaml' || '' }}
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sync-test-${{ github.event.inputs.network }}-${{ github.event.inputs.el_client }}-${{ matrix.cl_client }}
+          path: |
+            sync-test-results/
+            reports/
+          retention-days: 7
+      
+      - name: Display test summary
+        run: |
+          echo "## Sync Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Network:** ${{ github.event.inputs.network }}" >> $GITHUB_STEP_SUMMARY
+          echo "**EL Client:** ${{ github.event.inputs.el_client }}" >> $GITHUB_STEP_SUMMARY
+          echo "**CL Client:** ${{ matrix.cl_client }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Result:** ${{ steps.sync-test.outputs.test_result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Summary:** ${{ steps.sync-test.outputs.test_summary }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Enclave:** ${{ steps.sync-test.outputs.enclave_name }}" >> $GITHUB_STEP_SUMMARY
+
+  # Third job: Aggregate results and deploy to Pages
+  aggregate-and-deploy:
+    needs: sync-test
+    runs-on: ubuntu-latest
+    if: always()
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sync-test-*
+          path: ./all-results
+      
+      - name: Create aggregated report
+        run: |
+          mkdir -p pages
+          
+          # Create main index.html
+          cat > pages/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Sync Test Matrix Results</title>
+              <style>
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                      margin: 0;
+                      padding: 20px;
+                      background-color: #f6f8fa;
+                  }
+                  .container {
+                      max-width: 1200px;
+                      margin: 0 auto;
+                  }
+                  .header {
+                      background: white;
+                      border-radius: 8px;
+                      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                      padding: 30px;
+                      margin-bottom: 20px;
+                  }
+                  .header h1 {
+                      margin: 0;
+                      color: #24292e;
+                  }
+                  .header .subtitle {
+                      color: #586069;
+                      margin-top: 5px;
+                  }
+                  .results-grid {
+                      display: grid;
+                      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+                      gap: 20px;
+                  }
+                  .result-card {
+                      background: white;
+                      border-radius: 8px;
+                      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                      padding: 20px;
+                      transition: transform 0.2s;
+                  }
+                  .result-card:hover {
+                      transform: translateY(-2px);
+                      box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+                  }
+                  .result-card h3 {
+                      margin: 0 0 15px 0;
+                      color: #24292e;
+                  }
+                  .status {
+                      display: inline-block;
+                      padding: 4px 8px;
+                      border-radius: 4px;
+                      font-size: 12px;
+                      font-weight: 600;
+                      text-transform: uppercase;
+                  }
+                  .status.success {
+                      background-color: #d4f4dd;
+                      color: #28a745;
+                  }
+                  .status.failure {
+                      background-color: #ffeaea;
+                      color: #d73a49;
+                  }
+                  .status.unknown {
+                      background-color: #f0f0f0;
+                      color: #666;
+                  }
+                  .detail-link {
+                      display: inline-block;
+                      margin-top: 15px;
+                      color: #0366d6;
+                      text-decoration: none;
+                  }
+                  .detail-link:hover {
+                      text-decoration: underline;
+                  }
+                  .metadata {
+                      color: #586069;
+                      font-size: 14px;
+                      margin-top: 10px;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>Sync Test Matrix Results</h1>
+                      <div class="subtitle">Run #${{ github.run_number }} - $(date -u +'%Y-%m-%d %H:%M:%S UTC')</div>
+                      <div class="metadata">
+                          <p><strong>Network:</strong> ${{ github.event.inputs.network }}</p>
+                          <p><strong>EL Client:</strong> ${{ github.event.inputs.el_client }}</p>
+                          <p><strong>CL Clients Tested:</strong> ${{ github.event.inputs.cl_clients }}</p>
+                      </div>
+                  </div>
+                  <div class="results-grid">
+          EOF
+          
+          # Process each test result
+          for result_dir in all-results/sync-test-*/; do
+            if [ -d "$result_dir" ]; then
+              # Extract client info from directory name
+              dirname=$(basename "$result_dir")
+              cl_client=$(echo "$dirname" | awk -F'-' '{print $NF}')
+              
+              # Check for metadata and determine status
+              if [ -f "$result_dir/sync-test-results/metadata.json" ]; then
+                metadata=$(cat "$result_dir/sync-test-results/metadata.json")
+                status=$(echo "$metadata" | jq -r '.result')
+                duration=$(echo "$metadata" | jq -r '.duration')
+                
+                # Create subdirectory for this test
+                mkdir -p "pages/$cl_client"
+                
+                # Copy individual report if it exists
+                if [ -d "$result_dir/reports" ]; then
+                  cp -r "$result_dir/reports/"* "pages/$cl_client/"
+                fi
+                
+                # Copy test artifacts
+                if [ -d "$result_dir/sync-test-results" ]; then
+                  cp -r "$result_dir/sync-test-results" "pages/$cl_client/"
+                fi
+              else
+                status="unknown"
+                duration="N/A"
+              fi
+              
+              # Add card to main index
+              cat >> pages/index.html << EOF
+                      <div class="result-card">
+                          <h3>$cl_client</h3>
+                          <span class="status $status">$status</span>
+                          <div class="metadata">
+                              <p>Duration: ${duration}s</p>
+                          </div>
+                          <a href="./$cl_client/" class="detail-link">View Details →</a>
+                      </div>
+          EOF
+            fi
+          done
+          
+          # Close HTML
+          cat >> pages/index.html << 'EOF'
+                  </div>
+              </div>
+          </body>
+          </html>
+          EOF
+      
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      
+      - name: Upload to Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages/
+      
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

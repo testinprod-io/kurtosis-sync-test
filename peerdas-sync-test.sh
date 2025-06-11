@@ -613,25 +613,15 @@ generate_report() {
         local notes="${TEST_NOTES[$i]}"
         local log_path="${TEST_LOG_PATHS[$i]}"
         
-        # Apply color coding based on test status
+        # Apply color coding based on test status and count successes
         case "$status" in
             "Success")
-                status_colored="${GREEN}${status}${NC}"
                 ((success_count++))  # Increment success counter
-                ;;
-            "Failed")
-                status_colored="${RED}${status}${NC}"
-                ;;
-            "Timeout")
-                status_colored="${YELLOW}${status}${NC}"
-                ;;
-            *)
-                status_colored="${GRAY}${status}${NC}"
                 ;;
         esac
         
         # Print formatted row for this client
-        printf "%-20s | %-8s | %-10s | %s\n" "$client" "$status_colored" "$time" "$notes"
+        printf "%-20s | %-8s | %-10s | %s\n" "$client" "$status" "$time" "$notes"
         
         # If test failed and we have a log path, show it
         if [[ "$status" != "Success" && -n "$log_path" ]]; then

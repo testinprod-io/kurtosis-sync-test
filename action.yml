@@ -28,6 +28,11 @@ inputs:
     required: false
     default: 'lighthouse'
   
+  cl_clients:
+    description: 'Comma-separated list of CL clients for matrix testing'
+    required: false
+    default: ''
+  
   wait_time:
     description: 'Wait time in seconds before restarting clients'
     required: false
@@ -76,6 +81,18 @@ runs:
         if [[ ! "${{ inputs.cl_client }}" =~ ^(lighthouse|teku|prysm|nimbus|lodestar|grandine)$ ]]; then
           echo "Error: Invalid CL client '${{ inputs.cl_client }}'. Must be one of: lighthouse, teku, prysm, nimbus, lodestar, grandine"
           exit 1
+        fi
+        
+        # Validate CL clients list if provided
+        if [ -n "${{ inputs.cl_clients }}" ]; then
+          IFS=',' read -ra CLIENTS <<< "${{ inputs.cl_clients }}"
+          for client in "${CLIENTS[@]}"; do
+            client=$(echo "$client" | xargs) # trim whitespace
+            if [[ ! "$client" =~ ^(lighthouse|teku|prysm|nimbus|lodestar|grandine)$ ]]; then
+              echo "Error: Invalid CL client '$client' in cl_clients list. Must be one of: lighthouse, teku, prysm, nimbus, lodestar, grandine"
+              exit 1
+            fi
+          done
         fi
 
     - name: Install dependencies
