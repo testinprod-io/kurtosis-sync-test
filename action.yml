@@ -38,6 +38,11 @@ inputs:
     required: false
     default: 'true'
   
+  save_to_data_branch:
+    description: 'Whether to save results to data branch (requires GITHUB_TOKEN)'
+    required: false
+    default: 'false'
+  
   kurtosis_version:
     description: 'Version of Kurtosis CLI to use'
     required: false
@@ -475,6 +480,15 @@ runs:
           sync-test-results/
           reports/
         retention-days: 30
+
+    - name: Save results to data branch
+      if: inputs.save_to_data_branch == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        # Run the save script
+        bash ${{ github.action_path }}/.github/scripts/save-test-results.sh
 
 branding:
   icon: 'sync'

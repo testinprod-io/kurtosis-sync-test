@@ -60,9 +60,8 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
+  pull-requests: write
 
 jobs:
   sync-test:
@@ -115,15 +114,10 @@ jobs:
           cl_client: ${{ steps.matrix.outputs.cl_client }}
           wait_time: ${{ steps.matrix.outputs.wait_time }}
           enclave_name: ${{ steps.matrix.outputs.enclave_name }}
-          generate_html_report: 'true'
+          generate_html_report: 'false'
+          save_to_data_branch: 'true'
           config_file: ${{ steps.matrix.outputs.network == 'fusaka-devnet-1' && 'devnet-templates/devnet-template.yaml' || '' }}
       
-      - name: Upload to Pages (for matrix builds)
-        if: github.event_name == 'schedule'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          name: sync-test-${{ steps.matrix.outputs.network }}-${{ steps.matrix.outputs.el_client }}-${{ steps.matrix.outputs.cl_client }}
-          path: reports/
       
       - name: Display test summary
         run: |
@@ -135,59 +129,5 @@ jobs:
           echo "**Result:** ${{ steps.sync-test.outputs.test_result }}" >> $GITHUB_STEP_SUMMARY
           echo "**Summary:** ${{ steps.sync-test.outputs.test_summary }}" >> $GITHUB_STEP_SUMMARY
           echo "**Enclave:** ${{ steps.sync-test.outputs.enclave_name }}" >> $GITHUB_STEP_SUMMARY
-
-  # Job for manual dispatch - single test with pages deployment
-  deploy-pages:
-    if: github.event_name == 'workflow_dispatch'
-    needs: sync-test
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    
-    steps:
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: sync-test-results-*
-          path: ./all-reports
-          merge-multiple: true
-      
-      - name: Prepare Pages content
-        run: |
-          mkdir -p pages
-          
-          # Copy reports if they exist
-          if [ -d "./all-reports/reports" ]; then
-            cp -r ./all-reports/reports/* pages/
-          fi
-          
-          # Create index if it doesn't exist
-          if [ ! -f "pages/index.html" ]; then
-            cat > pages/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <title>Sync Test Results</title>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          </head>
-          <body>
-              <h1>Sync Test Results</h1>
-              <p>No test results available.</p>
-          </body>
-          </html>
-          EOF
-          fi
-      
-      - name: Upload to Pages
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: pages/
-      
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View historical results at: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> $GITHUB_STEP_SUMMARY
