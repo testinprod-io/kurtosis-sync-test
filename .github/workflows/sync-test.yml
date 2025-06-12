@@ -52,17 +52,11 @@ on:
           - matrix
         default: 'single'
       
-      el_image:
-        description: 'Custom EL client image (optional, e.g., ethereum/client-go:v1.10.0)'
+      client_images:
+        description: 'Custom client images as JSON (e.g., {"geth":"ethereum/client-go:v1.13.0","lighthouse":"sigp/lighthouse:v4.5.0"})'
         required: false
         type: string
-        default: ''
-      
-      cl_image:
-        description: 'Custom CL client image (optional, e.g., sigp/lighthouse:v4.0.0)'
-        required: false
-        type: string
-        default: ''
+        default: '{}'
   
   schedule:
     # Run daily at 2:00 AM UTC
@@ -198,8 +192,7 @@ jobs:
           generate_html_report: 'false'
           save_to_data_branch: 'true'
           config_file: ${{ steps.config.outputs.config_file }}
-          el_image: ${{ github.event.inputs.el_image || '' }}
-          cl_image: ${{ github.event.inputs.cl_image || '' }}
+          client_images: ${{ github.event.inputs.client_images || '{}' }}
       
       - name: Upload test results
         uses: actions/upload-artifact@v4
