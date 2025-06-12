@@ -52,6 +52,16 @@ inputs:
     description: 'Version of Kurtosis CLI to use'
     required: false
     default: 'latest'
+  
+  el_image:
+    description: 'Custom EL client image (e.g., ethereum/client-go:v1.10.0)'
+    required: false
+    default: ''
+  
+  cl_image:
+    description: 'Custom CL client image (e.g., sigp/lighthouse:v4.0.0)'
+    required: false
+    default: ''
 
 outputs:
   test_result:
@@ -168,23 +178,31 @@ runs:
           export NAT_EXIT_IP="127.0.0.1"
           export CHECKPOINT_SYNC="true"
           
-          # Get default images based on client type
-          case "${{ inputs.el_client }}" in
-            "geth") export EL_CLIENT_IMAGE="ethereum/client-go:stable" ;;
-            "nethermind") export EL_CLIENT_IMAGE="nethermind/nethermind:latest" ;;
-            "reth") export EL_CLIENT_IMAGE="ghcr.io/paradigmxyz/reth:latest" ;;
-            "besu") export EL_CLIENT_IMAGE="hyperledger/besu:latest" ;;
-            "erigon") export EL_CLIENT_IMAGE="thorax/erigon:devel" ;;
-          esac
+          # Get default images based on client type or use custom image
+          if [ -n "${{ inputs.el_image }}" ]; then
+            export EL_CLIENT_IMAGE="${{ inputs.el_image }}"
+          else
+            case "${{ inputs.el_client }}" in
+              "geth") export EL_CLIENT_IMAGE="ethereum/client-go:stable" ;;
+              "nethermind") export EL_CLIENT_IMAGE="nethermind/nethermind:latest" ;;
+              "reth") export EL_CLIENT_IMAGE="ghcr.io/paradigmxyz/reth:latest" ;;
+              "besu") export EL_CLIENT_IMAGE="hyperledger/besu:latest" ;;
+              "erigon") export EL_CLIENT_IMAGE="thorax/erigon:devel" ;;
+            esac
+          fi
           
-          case "${{ inputs.cl_client }}" in
-            "lighthouse") export CL_CLIENT_IMAGE="sigp/lighthouse:latest" ;;
-            "teku") export CL_CLIENT_IMAGE="consensys/teku:latest" ;;
-            "prysm") export CL_CLIENT_IMAGE="gcr.io/prysmaticlabs/prysm/beacon-chain:stable" ;;
-            "nimbus") export CL_CLIENT_IMAGE="statusim/nimbus-eth2:multiarch-latest" ;;
-            "lodestar") export CL_CLIENT_IMAGE="chainsafe/lodestar:next" ;;
-            "grandine") export CL_CLIENT_IMAGE="sifrai/grandine:develop" ;;
-          esac
+          if [ -n "${{ inputs.cl_image }}" ]; then
+            export CL_CLIENT_IMAGE="${{ inputs.cl_image }}"
+          else
+            case "${{ inputs.cl_client }}" in
+              "lighthouse") export CL_CLIENT_IMAGE="sigp/lighthouse:latest" ;;
+              "teku") export CL_CLIENT_IMAGE="consensys/teku:latest" ;;
+              "prysm") export CL_CLIENT_IMAGE="gcr.io/prysmaticlabs/prysm/beacon-chain:stable" ;;
+              "nimbus") export CL_CLIENT_IMAGE="statusim/nimbus-eth2:multiarch-latest" ;;
+              "lodestar") export CL_CLIENT_IMAGE="chainsafe/lodestar:next" ;;
+              "grandine") export CL_CLIENT_IMAGE="sifrai/grandine:develop" ;;
+            esac
+          fi
           
           # Substitute variables in template
           envsubst < "$config_file" > "$temp_config"
@@ -224,6 +242,12 @@ runs:
         echo "  Network: ${{ inputs.network }}"
         echo "  EL Client: ${{ inputs.el_client }}"
         echo "  CL Client: ${{ inputs.cl_client }}"
+        if [ -n "${{ inputs.el_image }}" ]; then
+          echo "  EL Image: ${{ inputs.el_image }}"
+        fi
+        if [ -n "${{ inputs.cl_image }}" ]; then
+          echo "  CL Image: ${{ inputs.cl_image }}"
+        fi
         echo "  Wait Time: ${{ inputs.wait_time }}s"
         echo
         
@@ -253,6 +277,8 @@ runs:
           "network": "${{ inputs.network }}",
           "el_client": "${{ inputs.el_client }}",
           "cl_client": "${{ inputs.cl_client }}",
+          "el_image": "${{ inputs.el_image }}",
+          "cl_image": "${{ inputs.cl_image }}",
           "wait_time": ${{ inputs.wait_time }},
           "start_time": $start_time,
           "end_time": $end_time,
