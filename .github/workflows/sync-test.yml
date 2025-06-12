@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       network:
-        description: 'Network to test'
+        description: 'Network to test (select from list or enter custom)'
         required: true
         type: choice
         options:
@@ -12,31 +12,24 @@ on:
           - mainnet
           - sepolia
           - hoodi
+          - custom
         default: 'fusaka-devnet-1'
       
-      el_client:
-        description: 'Execution layer client'
+      custom_network:
+        description: 'Custom network name (only used if network is "custom")'
+        required: false
+        type: string
+      
+      el_clients:
+        description: 'Comma-separated list of EL clients (e.g., geth,nethermind,reth)'
         required: true
-        type: choice
-        options:
-          - geth
-          - nethermind
-          - reth
-          - besu
-          - erigon
+        type: string
         default: 'geth'
       
-      cl_client:
-        description: 'Consensus layer client'
+      cl_clients:
+        description: 'Comma-separated list of CL clients (e.g., lighthouse,teku,prysm)'
         required: true
-        type: choice
-        options:
-          - lighthouse
-          - teku
-          - prysm
-          - nimbus
-          - lodestar
-          - grandine
+        type: string
         default: 'lighthouse'
       
       wait_time:
@@ -49,6 +42,15 @@ on:
         description: 'Custom enclave name (optional)'
         required: false
         type: string
+      
+      matrix_mode:
+        description: 'Run as matrix (all combinations) or single test'
+        required: true
+        type: choice
+        options:
+          - single
+          - matrix
+        default: 'single'
   
   schedule:
     # Run daily at 2:00 AM UTC
@@ -56,65 +58,210 @@ on:
 
 # Allow only one concurrent deployment, skipping runs queued between the one in-progress and latest queued.
 concurrency:
-  group: "sync-test"
+  group: "sync-test-${{ github.event.inputs.network || 'scheduled' }}"
   cancel-in-progress: false
 
 permissions:
   contents: write
   pull-requests: write
+  pages: write
+  id-token: write
 
 jobs:
+  # First job: Parse inputs and create matrix
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      network: ${{ steps.set-network.outputs.network }}
+      test_count: ${{ steps.set-matrix.outputs.test_count }}
+    steps:
+      - name: Determine network
+        id: set-network
+        run: |
+          if [ "${{ github.event_name }}" == "schedule" ]; then
+            echo "network=fusaka-devnet-1" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.inputs.network }}" == "custom" ]; then
+            echo "network=${{ github.event.inputs.custom_network }}" >> $GITHUB_OUTPUT
+          else
+            echo "network=${{ github.event.inputs.network }}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Parse clients and create matrix
+        id: set-matrix
+        run: |
+          # For scheduled runs, use default matrix
+          if [ "${{ github.event_name }}" == "schedule" ]; then
+            MATRIX_JSON='{"include":[{"el_client":"geth","cl_client":"lighthouse"},{"el_client":"nethermind","cl_client":"teku"},{"el_client":"reth","cl_client":"lighthouse"},{"el_client":"besu","cl_client":"teku"}]}'
+            echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+            echo "test_count=4" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Parse comma-separated clients
+          EL_CLIENTS="${{ github.event.inputs.el_clients }}"
+          CL_CLIENTS="${{ github.event.inputs.cl_clients }}"
+          MATRIX_MODE="${{ github.event.inputs.matrix_mode }}"
+          
+          # Convert to arrays
+          IFS=',' read -ra EL_ARRAY <<< "$EL_CLIENTS"
+          IFS=',' read -ra CL_ARRAY <<< "$CL_CLIENTS"
+          
+          # Trim whitespace from each element
+          for i in "${!EL_ARRAY[@]}"; do
+            EL_ARRAY[$i]=$(echo "${EL_ARRAY[$i]}" | xargs)
+          done
+          for i in "${!CL_ARRAY[@]}"; do
+            CL_ARRAY[$i]=$(echo "${CL_ARRAY[$i]}" | xargs)
+          done
+          
+          # Create matrix based on mode
+          MATRIX_JSON='{"include":['
+          FIRST=true
+          TEST_COUNT=0
+          
+          if [ "$MATRIX_MODE" == "matrix" ]; then
+            # Create all combinations
+            for el in "${EL_ARRAY[@]}"; do
+              for cl in "${CL_ARRAY[@]}"; do
+                if [ "$FIRST" = true ]; then
+                  FIRST=false
+                else
+                  MATRIX_JSON+=','
+                fi
+                MATRIX_JSON+="{\"el_client\":\"$el\",\"cl_client\":\"$cl\"}"
+                ((TEST_COUNT++))
+              done
+            done
+          else
+            # Single test mode - use first of each
+            if [ "$FIRST" = true ]; then
+              FIRST=false
+            else
+              MATRIX_JSON+=','
+            fi
+            MATRIX_JSON+="{\"el_client\":\"${EL_ARRAY[0]}\",\"cl_client\":\"${CL_ARRAY[0]}\"}"
+            TEST_COUNT=1
+          fi
+          
+          MATRIX_JSON+=']}'
+          
+          echo "Generated matrix: $MATRIX_JSON"
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+          echo "test_count=$TEST_COUNT" >> $GITHUB_OUTPUT
+
+  # Second job: Run sync tests
   sync-test:
+    needs: setup-matrix
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include: ${{ fromJson(github.event_name == 'workflow_dispatch' && '[{"network":"manual","el_client":"manual","cl_client":"manual"}]' || '[{"network":"fusaka-devnet-1","el_client":"geth","cl_client":"lighthouse"},{"network":"fusaka-devnet-1","el_client":"nethermind","cl_client":"teku"},{"network":"fusaka-devnet-1","el_client":"reth","cl_client":"lighthouse"},{"network":"fusaka-devnet-1","el_client":"besu","cl_client":"teku"}]') }}
+      matrix: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set matrix values for manual runs
-        id: matrix
+      - name: Determine config file
+        id: config
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "network=${{ github.event.inputs.network }}" >> $GITHUB_OUTPUT
-            echo "el_client=${{ github.event.inputs.el_client }}" >> $GITHUB_OUTPUT
-            echo "cl_client=${{ github.event.inputs.cl_client }}" >> $GITHUB_OUTPUT
-            echo "wait_time=${{ github.event.inputs.wait_time }}" >> $GITHUB_OUTPUT
-            echo "enclave_name=${{ github.event.inputs.enclave_name }}" >> $GITHUB_OUTPUT
+          NETWORK="${{ needs.setup-matrix.outputs.network }}"
+          if [ "$NETWORK" == "fusaka-devnet-1" ]; then
+            echo "config_file=devnet-templates/devnet-template.yaml" >> $GITHUB_OUTPUT
+          elif [ -f "${NETWORK}/${NETWORK}-${{ matrix.el_client }}.yaml" ]; then
+            echo "config_file=${NETWORK}/${NETWORK}-${{ matrix.el_client }}.yaml" >> $GITHUB_OUTPUT
           else
-            echo "network=${{ matrix.network }}" >> $GITHUB_OUTPUT
-            echo "el_client=${{ matrix.el_client }}" >> $GITHUB_OUTPUT
-            echo "cl_client=${{ matrix.cl_client }}" >> $GITHUB_OUTPUT
-            echo "wait_time=1800" >> $GITHUB_OUTPUT
-            echo "enclave_name=" >> $GITHUB_OUTPUT
+            echo "config_file=" >> $GITHUB_OUTPUT
           fi
       
       - name: Run sync test
         uses: ./
         id: sync-test
         with:
-          network: ${{ steps.matrix.outputs.network }}
-          el_client: ${{ steps.matrix.outputs.el_client }}
-          cl_client: ${{ steps.matrix.outputs.cl_client }}
-          wait_time: ${{ steps.matrix.outputs.wait_time }}
-          enclave_name: ${{ steps.matrix.outputs.enclave_name }}
+          network: ${{ needs.setup-matrix.outputs.network }}
+          el_client: ${{ matrix.el_client }}
+          cl_client: ${{ matrix.cl_client }}
+          wait_time: ${{ github.event.inputs.wait_time || '1800' }}
+          enclave_name: ${{ github.event.inputs.enclave_name || format('sync-{0}-{1}-{2}-{3}', needs.setup-matrix.outputs.network, matrix.el_client, matrix.cl_client, github.run_number) }}
           generate_html_report: 'false'
-          save_to_data_branch: 'true'  # Always save results
-          config_file: ${{ steps.matrix.outputs.network == 'fusaka-devnet-1' && 'devnet-templates/devnet-template.yaml' || '' }}
+          save_to_data_branch: 'true'
+          config_file: ${{ steps.config.outputs.config_file }}
       
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always() && needs.setup-matrix.outputs.test_count > 1
+        with:
+          name: sync-test-${{ needs.setup-matrix.outputs.network }}-${{ matrix.el_client }}-${{ matrix.cl_client }}
+          path: |
+            sync-test-results/
+            reports/
+          retention-days: 7
       
       - name: Display test summary
         run: |
           echo "## Sync Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Network:** ${{ steps.matrix.outputs.network }}" >> $GITHUB_STEP_SUMMARY
-          echo "**EL Client:** ${{ steps.matrix.outputs.el_client }}" >> $GITHUB_STEP_SUMMARY
-          echo "**CL Client:** ${{ steps.matrix.outputs.cl_client }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Network:** ${{ needs.setup-matrix.outputs.network }}" >> $GITHUB_STEP_SUMMARY
+          echo "**EL Client:** ${{ matrix.el_client }}" >> $GITHUB_STEP_SUMMARY
+          echo "**CL Client:** ${{ matrix.cl_client }}" >> $GITHUB_STEP_SUMMARY
           echo "**Result:** ${{ steps.sync-test.outputs.test_result }}" >> $GITHUB_STEP_SUMMARY
           echo "**Summary:** ${{ steps.sync-test.outputs.test_summary }}" >> $GITHUB_STEP_SUMMARY
           echo "**Enclave:** ${{ steps.sync-test.outputs.enclave_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "View historical results at: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> $GITHUB_STEP_SUMMARY
+
+  # Third job: Aggregate results (only for matrix mode with multiple tests)
+  aggregate-results:
+    needs: [setup-matrix, sync-test]
+    runs-on: ubuntu-latest
+    if: always() && needs.setup-matrix.outputs.test_count > 1
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sync-test-*
+          path: ./all-results
+      
+      - name: Create aggregated summary
+        run: |
+          echo "## Sync Test Matrix Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Network:** ${{ needs.setup-matrix.outputs.network }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Total Tests:** ${{ needs.setup-matrix.outputs.test_count }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Create results table
+          echo "| EL Client | CL Client | Status | Duration |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-----------|--------|----------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Process each test result
+          for result_dir in all-results/sync-test-*/; do
+            if [ -d "$result_dir" ]; then
+              dirname=$(basename "$result_dir")
+              # Extract client names from directory name
+              network_el_cl=$(echo "$dirname" | sed 's/sync-test-//')
+              el_client=$(echo "$network_el_cl" | cut -d'-' -f2)
+              cl_client=$(echo "$network_el_cl" | cut -d'-' -f3)
+              
+              # Get status from metadata
+              if [ -f "$result_dir/sync-test-results/metadata.json" ]; then
+                status=$(cat "$result_dir/sync-test-results/metadata.json" | jq -r '.result')
+                duration=$(cat "$result_dir/sync-test-results/metadata.json" | jq -r '.duration')
+                
+                # Add emoji based on status
+                case "$status" in
+                  "success") status_emoji="✅ $status" ;;
+                  "failure") status_emoji="❌ $status" ;;
+                  *) status_emoji="❓ $status" ;;
+                esac
+                
+                echo "| $el_client | $cl_client | $status_emoji | ${duration}s |" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "| $el_client | $cl_client | ❓ unknown | N/A |" >> $GITHUB_STEP_SUMMARY
+              fi
+            fi
+          done
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View detailed results at: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> $GITHUB_STEP_SUMMARY
