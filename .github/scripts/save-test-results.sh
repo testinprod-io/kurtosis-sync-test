@@ -87,6 +87,13 @@ ENHANCED_METADATA=$(echo "$METADATA" | jq --arg workflow "$GITHUB_WORKFLOW" \
         saved_at: $timestamp
     }')
 
+# Ensure database size fields are preserved if they exist in the original metadata
+if echo "$METADATA" | jq -e '.el_db_size' > /dev/null 2>&1 && echo "$METADATA" | jq -e '.cl_db_size' > /dev/null 2>&1; then
+    EL_DB_SIZE=$(echo "$METADATA" | jq -r '.el_db_size')
+    CL_DB_SIZE=$(echo "$METADATA" | jq -r '.cl_db_size')
+    echo "Preserving database sizes from metadata: EL=$EL_DB_SIZE, CL=$CL_DB_SIZE"
+fi
+
 # Save enhanced metadata
 echo "$ENHANCED_METADATA" > "$FILEPATH"
 

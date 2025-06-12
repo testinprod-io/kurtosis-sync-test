@@ -91,6 +91,14 @@
                 <h3 id="successRate">0%</h3>
                 <p>Success Rate</p>
             </div>
+            <div class="summary-card">
+                <h3 id="avgElDbSize">N/A</h3>
+                <p>Avg EL DB Size</p>
+            </div>
+            <div class="summary-card">
+                <h3 id="avgClDbSize">N/A</h3>
+                <p>Avg CL DB Size</p>
+            </div>
         </div>
 
         <div class="loading" id="loading">Loading test results...</div>
@@ -113,8 +121,13 @@
         </div>
 
         <div class="charts-section">
-            <h2>Trends</h2>
+            <h2>Test Results Trends</h2>
             <canvas id="trendsChart"></canvas>
+        </div>
+
+        <div class="charts-section">
+            <h2>Database Size Trends</h2>
+            <canvas id="dbSizeTrendsChart"></canvas>
         </div>
     </div>
 
