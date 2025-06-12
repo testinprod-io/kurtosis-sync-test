@@ -65,6 +65,7 @@ if kurtosis enclave inspect "$enclave" 2> /dev/null 1> /dev/null; then
 else
     echo "start kurtosis enclave '$enclave'..."
 
+    # Run with --non-blocking-tasks to allow parallel task execution for better performance
     kurtosis run github.com/ethpandaops/ethereum-package --enclave "$enclave" --args-file "$config" --image-download always --non-blocking-tasks
 fi
 
