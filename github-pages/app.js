@@ -8,6 +8,7 @@ let allTestResults = [];
 let filteredResults = [];
 let availableNetworks = new Set();
 let trendsChart = null;
+let dbSizeTrendsChart = null;
 let currentView = 'results'; // 'results' or 'detail'
 let currentRunData = null;
 
@@ -222,6 +223,7 @@ function applyFilters() {
     updateSummaryCards();
     displayResults();
     updateTrendsChart();
+    updateDbSizeTrendsChart();
 }
 
 // Update summary cards
@@ -231,10 +233,39 @@ function updateSummaryCards() {
     const failed = filteredResults.filter(t => t.result === 'failure').length;
     const successRate = total > 0 ? Math.round((successful / total) * 100) : 0;
     
+    // Calculate average database sizes
+    const testsWithElDb = filteredResults.filter(test => test.el_db_size && test.el_db_size !== 'N/A');
+    const testsWithClDb = filteredResults.filter(test => test.cl_db_size && test.cl_db_size !== 'N/A');
+    
+    let avgElDbSize = 'N/A';
+    let avgClDbSize = 'N/A';
+    
+    if (testsWithElDb.length > 0) {
+        const totalElSize = testsWithElDb.reduce((sum, test) => {
+            const size = parseFloat(test.el_db_size.replace('GB', ''));
+            return sum + (isNaN(size) ? 0 : size);
+        }, 0);
+        avgElDbSize = `${(totalElSize / testsWithElDb.length).toFixed(1)} GB`;
+    }
+    
+    if (testsWithClDb.length > 0) {
+        const totalClSize = testsWithClDb.reduce((sum, test) => {
+            const size = parseFloat(test.cl_db_size.replace('GB', ''));
+            return sum + (isNaN(size) ? 0 : size);
+        }, 0);
+        avgClDbSize = `${(totalClSize / testsWithClDb.length).toFixed(1)} GB`;
+    }
+    
     document.getElementById('totalTests').textContent = total;
     document.getElementById('successfulTests').textContent = successful;
     document.getElementById('failedTests').textContent = failed;
     document.getElementById('successRate').textContent = `${successRate}%`;
+    
+    // Update database size summary if elements exist
+    const avgElDbElement = document.getElementById('avgElDbSize');
+    const avgClDbElement = document.getElementById('avgClDbSize');
+    if (avgElDbElement) avgElDbElement.textContent = avgElDbSize;
+    if (avgClDbElement) avgClDbElement.textContent = avgClDbSize;
 }
 
 // Display results grid
@@ -306,6 +337,14 @@ function createResultCard(test) {
             <div class="metadata-item">
                 <span class="metadata-label">Run ID</span>
                 <span class="metadata-value">${runIdDisplay}</span>
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">EL DB Size</span>
+                <span class="metadata-value">${test.el_db_size || 'N/A'}</span>
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">CL DB Size</span>
+                <span class="metadata-value">${test.cl_db_size || 'N/A'}</span>
             </div>
         </div>
         <span class="status-badge ${test.result}">${test.result}</span>
@@ -393,6 +432,112 @@ function updateTrendsChart() {
                         beginAtZero: true,
                         ticks: {
                             stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+// Update database size trends chart
+function updateDbSizeTrendsChart() {
+    const ctx = document.getElementById('dbSizeTrendsChart').getContext('2d');
+    
+    // Group results by date and calculate average database sizes
+    const dbSizesByDate = {};
+    filteredResults.forEach(test => {
+        if (!dbSizesByDate[test.date]) {
+            dbSizesByDate[test.date] = { elSizes: [], clSizes: [] };
+        }
+        
+        // Extract numeric values from database sizes
+        if (test.el_db_size && test.el_db_size !== 'N/A') {
+            const elSize = parseFloat(test.el_db_size.replace('GB', ''));
+            if (!isNaN(elSize)) {
+                dbSizesByDate[test.date].elSizes.push(elSize);
+            }
+        }
+        
+        if (test.cl_db_size && test.cl_db_size !== 'N/A') {
+            const clSize = parseFloat(test.cl_db_size.replace('GB', ''));
+            if (!isNaN(clSize)) {
+                dbSizesByDate[test.date].clSizes.push(clSize);
+            }
+        }
+    });
+    
+    // Sort dates
+    const dates = Object.keys(dbSizesByDate).sort();
+    
+    // Calculate averages for each date
+    const avgElSizes = dates.map(date => {
+        const sizes = dbSizesByDate[date].elSizes;
+        return sizes.length > 0 ? sizes.reduce((a, b) => a + b) / sizes.length : null;
+    });
+    
+    const avgClSizes = dates.map(date => {
+        const sizes = dbSizesByDate[date].clSizes;
+        return sizes.length > 0 ? sizes.reduce((a, b) => a + b) / sizes.length : null;
+    });
+    
+    // Prepare chart data
+    const chartData = {
+        labels: dates,
+        datasets: [
+            {
+                label: 'Avg EL DB Size (GB)',
+                data: avgElSizes,
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderColor: 'rgb(54, 162, 235)',
+                borderWidth: 2,
+                tension: 0.1,
+                spanGaps: true
+            },
+            {
+                label: 'Avg CL DB Size (GB)',
+                data: avgClSizes,
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                borderColor: 'rgb(255, 99, 132)',
+                borderWidth: 2,
+                tension: 0.1,
+                spanGaps: true
+            }
+        ]
+    };
+    
+    // Update or create chart
+    if (dbSizeTrendsChart) {
+        dbSizeTrendsChart.data = chartData;
+        dbSizeTrendsChart.update();
+    } else {
+        dbSizeTrendsChart = new Chart(ctx, {
+            type: 'line',
+            data: chartData,
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Database Size Trends Over Time'
+                    },
+                    legend: {
+                        display: true,
+                        position: 'bottom'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Database Size (GB)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Date'
                         }
                     }
                 }

@@ -275,6 +275,26 @@ runs:
         # Calculate duration
         duration=$((end_time - start_time))
         
+        # Extract database sizes from CSV files if they exist
+        EL_DB_SIZE="N/A"
+        CL_DB_SIZE="N/A"
+        
+        # Look for CSV files in results directory
+        if ls results/*.csv 1> /dev/null 2>&1; then
+          # Get the most recent CSV file
+          CSV_FILE=$(ls -t results/*.csv | head -n 1)
+          if [ -f "$CSV_FILE" ]; then
+            echo "Extracting database sizes from $CSV_FILE"
+            # Read the last line of the CSV (excluding header)
+            CSV_LINE=$(tail -n 1 "$CSV_FILE")
+            if [ -n "$CSV_LINE" ] && [ "$CSV_LINE" != "EL_DBSize;CL_DBSize;SyncDurationSeconds;StartTimestamp;EndTimestamp" ]; then
+              EL_DB_SIZE=$(echo "$CSV_LINE" | cut -d';' -f1)
+              CL_DB_SIZE=$(echo "$CSV_LINE" | cut -d';' -f2)
+              echo "Found database sizes - EL: $EL_DB_SIZE, CL: $CL_DB_SIZE"
+            fi
+          fi
+        fi
+        
         # Create summary
         summary="Sync test completed in ${duration}s with result: $test_result"
         echo "summary=$summary" >> $GITHUB_OUTPUT
@@ -293,6 +313,8 @@ runs:
           "end_time": $end_time,
           "duration": $duration,
           "result": "$test_result",
+          "el_db_size": "$EL_DB_SIZE",
+          "cl_db_size": "$CL_DB_SIZE",
           "github_run_id": "${GITHUB_RUN_ID}",
           "github_run_number": "${GITHUB_RUN_NUMBER}",
           "github_sha": "${GITHUB_SHA}",

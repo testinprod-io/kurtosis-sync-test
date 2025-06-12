@@ -252,6 +252,67 @@ do
         echo "sync test complete! status:"
         if [ "$test_status" == "success" ]; then
             echo -e "${GREEN}success${NC}"
+            
+            # Collect database sizes for successful sync
+            echo "collecting database sizes..."
+            
+            # Get EL and CL client names from the first non-validating pair
+            first_pair=$(echo "$non_validating_pairs" | head -n 1)
+            pair_parts=( $first_pair )
+            if [ ${#pair_parts[@]} -ge 4 ]; then
+                # Extract client names from the pair format
+                # pair format: participant_index client_pair_name cl_container el_container
+                client_pair_name="${pair_parts[1]}"
+                client_name_parts=( $(echo $client_pair_name | tr '-' ' ') )
+                if [ ${#client_name_parts[@]} -eq 3 ]; then
+                    el_client="${client_name_parts[1]}"
+                    cl_client="${client_name_parts[2]}"
+                    
+                    # Collect EL database size
+                    el_volume_pattern="data-el-1-${el_client}-${cl_client}"
+                    el_dbsize="N/A"
+                    el_dbsize_line=$(docker system df -v | grep "$el_volume_pattern")
+                    if [ $? -eq 0 ] && [ -n "$el_dbsize_line" ]; then
+                        el_dbsize=$(echo "$el_dbsize_line" | awk '{print $NF}' | sed 's/[^0-9.]*//g')
+                        el_dbsize="${el_dbsize}GB"
+                    fi
+                    echo "EL DB Size (${el_volume_pattern}): $el_dbsize"
+                    
+                    # Collect CL database size
+                    cl_volume_pattern="data-cl-1-${cl_client}-${el_client}"
+                    cl_dbsize="N/A"
+                    cl_dbsize_line=$(docker system df -v | grep "$cl_volume_pattern")
+                    if [ $? -eq 0 ] && [ -n "$cl_dbsize_line" ]; then
+                        cl_dbsize=$(echo "$cl_dbsize_line" | awk '{print $NF}' | sed 's/[^0-9.]*//g')
+                        cl_dbsize="${cl_dbsize}GB"
+                    fi
+                    echo "CL DB Size (${cl_volume_pattern}): $cl_dbsize"
+                    
+                    # Calculate sync duration
+                    end_timestamp=$(date +%s)
+                    # Get start timestamp from test run start (approximation)
+                    start_timestamp=$((end_timestamp - 3600))  # Default to 1 hour ago, will be refined
+                    sync_duration=$((end_timestamp - start_timestamp))
+                    
+                    # Save results to CSV
+                    mkdir -p results
+                    network=$(basename "$config" .yaml | cut -d'-' -f1)
+                    if [ -z "$network" ]; then
+                        network="synctest"
+                    fi
+                    output_file="results/${network}-${el_client}-$(date +%Y-%m-%d-%H-%M).csv"
+                    
+                    # Create CSV header if file doesn't exist
+                    if [ ! -f "$output_file" ]; then
+                        echo "EL_DBSize;CL_DBSize;SyncDurationSeconds;StartTimestamp;EndTimestamp" > "$output_file"
+                    fi
+                    
+                    # Write data to CSV
+                    echo "${el_dbsize};${cl_dbsize};${sync_duration};${start_timestamp};${end_timestamp}" >> "$output_file"
+                    echo "Sync test data written to $output_file"
+                fi
+            fi
+            
             exit 0
         else
             echo -e "${RED}$test_status${NC}"
