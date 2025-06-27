@@ -95,8 +95,8 @@ jobs:
       
       - name: Parse clients and create matrix
         id: set-matrix
+        shell: bash
         run: |
-          set -x  # Enable debug output
           # For scheduled runs, use default matrix
           if [ "${{ github.event_name }}" == "schedule" ]; then
             MATRIX_JSON='{"include":[{"el_client":"geth","cl_client":"lighthouse"},{"el_client":"nethermind","cl_client":"teku"},{"el_client":"reth","cl_client":"lighthouse"},{"el_client":"besu","cl_client":"teku"}]}'
@@ -110,42 +110,17 @@ jobs:
           CL_CLIENTS="${{ github.event.inputs.cl_clients }}"
           MATRIX_MODE="${{ github.event.inputs.matrix_mode }}"
           
-          # Convert comma-separated strings to arrays using a more portable method
-          # Parse EL clients
-          EL_ARRAY=""
-          EL_COUNT=0
-          OLD_IFS="$IFS"
-          IFS=','
-          for el in $EL_CLIENTS; do
-            el=$(echo "$el" | xargs)  # Trim whitespace
-            if [ -n "$el" ]; then
-              if [ -z "$EL_ARRAY" ]; then
-                EL_ARRAY="$el"
-              else
-                EL_ARRAY="$EL_ARRAY $el"
-              fi
-              EL_COUNT=$((EL_COUNT + 1))
-            fi
-          done
+          # Convert to arrays
+          IFS=',' read -ra EL_ARRAY <<< "$EL_CLIENTS"
+          IFS=',' read -ra CL_ARRAY <<< "$CL_CLIENTS"
           
-          # Parse CL clients
-          CL_ARRAY=""
-          CL_COUNT=0
-          for cl in $CL_CLIENTS; do
-            cl=$(echo "$cl" | xargs)  # Trim whitespace
-            if [ -n "$cl" ]; then
-              if [ -z "$CL_ARRAY" ]; then
-                CL_ARRAY="$cl"
-              else
-                CL_ARRAY="$CL_ARRAY $cl"
-              fi
-              CL_COUNT=$((CL_COUNT + 1))
-            fi
+          # Trim whitespace from each element
+          for i in "${!EL_ARRAY[@]}"; do
+            EL_ARRAY[$i]=$(echo "${EL_ARRAY[$i]}" | xargs)
           done
-          IFS="$OLD_IFS"
-          
-          echo "EL clients: $EL_ARRAY"
-          echo "CL clients: $CL_ARRAY"
+          for i in "${!CL_ARRAY[@]}"; do
+            CL_ARRAY[$i]=$(echo "${CL_ARRAY[$i]}" | xargs)
+          done
           
           # Create matrix based on mode
           MATRIX_JSON='{"include":['
@@ -154,33 +129,29 @@ jobs:
           
           if [ "$MATRIX_MODE" == "matrix" ]; then
             # Create all combinations
-            for el in $EL_ARRAY; do
-              for cl in $CL_ARRAY; do
+            for el in "${EL_ARRAY[@]}"; do
+              for cl in "${CL_ARRAY[@]}"; do
                 if [ "$FIRST" = true ]; then
                   FIRST=false
                 else
-                  MATRIX_JSON="${MATRIX_JSON},"
+                  MATRIX_JSON+=','
                 fi
-                MATRIX_JSON="${MATRIX_JSON}{\"el_client\":\"$el\",\"cl_client\":\"$cl\"}"
-                TEST_COUNT=$((TEST_COUNT + 1))
+                MATRIX_JSON+="{\"el_client\":\"$el\",\"cl_client\":\"$cl\"}"
+                ((TEST_COUNT++))
               done
             done
           else
             # Single test mode - use first of each
-            # Get first element from space-separated strings
-            FIRST_EL=$(echo "$EL_ARRAY" | cut -d' ' -f1)
-            FIRST_CL=$(echo "$CL_ARRAY" | cut -d' ' -f1)
-            
             if [ "$FIRST" = true ]; then
               FIRST=false
             else
-              MATRIX_JSON="${MATRIX_JSON},"
+              MATRIX_JSON+=','
             fi
-            MATRIX_JSON="${MATRIX_JSON}{\"el_client\":\"$FIRST_EL\",\"cl_client\":\"$FIRST_CL\"}"
+            MATRIX_JSON+="{\"el_client\":\"${EL_ARRAY[0]}\",\"cl_client\":\"${CL_ARRAY[0]}\"}"
             TEST_COUNT=1
           fi
           
-          MATRIX_JSON="${MATRIX_JSON}]}"
+          MATRIX_JSON+=']}'
           
           echo "Generated matrix: $MATRIX_JSON"
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
