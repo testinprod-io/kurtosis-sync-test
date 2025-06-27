@@ -1,0 +1,9 @@
+{
+  "inputs": {
+    "network": "fusaka-devnet-2",
+    "el_clients": "geth,nethermind",
+    "cl_clients": "lighthouse,teku",
+    "matrix_mode": "matrix",
+    "wait_time": "60"
+  }
+}
