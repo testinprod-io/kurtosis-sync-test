@@ -184,13 +184,24 @@ runs:
           # Get EL client image from JSON or use default
           EL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.el_client }}" '.[$client] // empty')
           if [ -z "$EL_IMAGE" ]; then
-            case "${{ inputs.el_client }}" in
-              "geth") export EL_CLIENT_IMAGE="ethereum/client-go:stable" ;;
-              "nethermind") export EL_CLIENT_IMAGE="nethermind/nethermind:latest" ;;
-              "reth") export EL_CLIENT_IMAGE="ghcr.io/paradigmxyz/reth:latest" ;;
-              "besu") export EL_CLIENT_IMAGE="hyperledger/besu:latest" ;;
-              "erigon") export EL_CLIENT_IMAGE="thorax/erigon:devel" ;;
-            esac
+            # Use fusaka-specific images when network is fusaka-devnet-2
+            if [ "${{ inputs.network }}" = "fusaka-devnet-2" ]; then
+              case "${{ inputs.el_client }}" in
+                "geth") export EL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/geth:fusaka-devnet-2" ;;
+                "nethermind") export EL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/nethermind:fusaka-devnet-2" ;;
+                "reth") export EL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/reth:fusaka-devnet-2" ;;
+                "besu") export EL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/besu:fusaka-devnet-2" ;;
+                "erigon") export EL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/erigon:fusaka-devnet-2" ;;
+              esac
+            else
+              case "${{ inputs.el_client }}" in
+                "geth") export EL_CLIENT_IMAGE="ethereum/client-go:stable" ;;
+                "nethermind") export EL_CLIENT_IMAGE="nethermind/nethermind:latest" ;;
+                "reth") export EL_CLIENT_IMAGE="ghcr.io/paradigmxyz/reth:latest" ;;
+                "besu") export EL_CLIENT_IMAGE="hyperledger/besu:latest" ;;
+                "erigon") export EL_CLIENT_IMAGE="thorax/erigon:devel" ;;
+              esac
+            fi
           else
             export EL_CLIENT_IMAGE="$EL_IMAGE"
           fi
@@ -198,14 +209,26 @@ runs:
           # Get CL client image from JSON or use default
           CL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.cl_client }}" '.[$client] // empty')
           if [ -z "$CL_IMAGE" ]; then
-            case "${{ inputs.cl_client }}" in
-              "lighthouse") export CL_CLIENT_IMAGE="sigp/lighthouse:latest" ;;
-              "teku") export CL_CLIENT_IMAGE="consensys/teku:latest" ;;
-              "prysm") export CL_CLIENT_IMAGE="gcr.io/prysmaticlabs/prysm/beacon-chain:stable" ;;
-              "nimbus") export CL_CLIENT_IMAGE="statusim/nimbus-eth2:multiarch-latest" ;;
-              "lodestar") export CL_CLIENT_IMAGE="chainsafe/lodestar:next" ;;
-              "grandine") export CL_CLIENT_IMAGE="sifrai/grandine:develop" ;;
-            esac
+            # Use fusaka-specific images when network is fusaka-devnet-2
+            if [ "${{ inputs.network }}" = "fusaka-devnet-2" ]; then
+              case "${{ inputs.cl_client }}" in
+                "lighthouse") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/lighthouse:fusaka-devnet-2" ;;
+                "teku") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/teku:fusaka-devnet-2" ;;
+                "prysm") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/prysm-beacon-chain:fusaka-devnet-2" ;;
+                "nimbus") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/nimbus-eth2:fusaka-devnet-2" ;;
+                "lodestar") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/lodestar:fusaka-devnet-2" ;;
+                "grandine") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/grandine:fusaka-devnet-2" ;;
+              esac
+            else
+              case "${{ inputs.cl_client }}" in
+                "lighthouse") export CL_CLIENT_IMAGE="sigp/lighthouse:latest" ;;
+                "teku") export CL_CLIENT_IMAGE="consensys/teku:latest" ;;
+                "prysm") export CL_CLIENT_IMAGE="gcr.io/prysmaticlabs/prysm/beacon-chain:stable" ;;
+                "nimbus") export CL_CLIENT_IMAGE="statusim/nimbus-eth2:multiarch-latest" ;;
+                "lodestar") export CL_CLIENT_IMAGE="chainsafe/lodestar:next" ;;
+                "grandine") export CL_CLIENT_IMAGE="sifrai/grandine:develop" ;;
+              esac
+            fi
           else
             export CL_CLIENT_IMAGE="$CL_IMAGE"
           fi
