@@ -356,6 +356,49 @@ runs:
         }
         EOF
 
+    - name: Collect Kurtosis enclave dump
+      shell: bash
+      if: always()
+      run: |
+        # Create directory for enclave dump
+        mkdir -p enclave-dump
+        
+        # Get the enclave name from the sync test output
+        enclave_name="${{ steps.sync-test.outputs.enclave_name }}"
+        
+        if [ -n "$enclave_name" ]; then
+          echo "Collecting enclave dump for: $enclave_name"
+          
+          # Perform kurtosis enclave dump
+          kurtosis enclave dump "$enclave_name" enclave-dump 2>/dev/null || echo "Warning: Failed to dump enclave logs"
+          
+          # Also collect individual service logs
+          echo "Collecting individual service logs..."
+          services=$(kurtosis enclave inspect "$enclave_name" 2>/dev/null | grep -E "cl-|el-|assertoor" | awk '{print $1}' || true)
+          
+          if [ -n "$services" ]; then
+            mkdir -p enclave-dump/service-logs
+            for service in $services; do
+              echo "Getting logs for $service..."
+              kurtosis service logs "$enclave_name" "$service" > "enclave-dump/service-logs/${service}.log" 2>&1 || true
+            done
+          fi
+          
+          # Copy the config file used
+          if [ -f "${{ steps.config.outputs.config_file }}" ]; then
+            cp "${{ steps.config.outputs.config_file }}" enclave-dump/config.yaml
+          fi
+          
+          # Copy sync test results
+          if [ -d sync-test-results ]; then
+            cp -r sync-test-results enclave-dump/
+          fi
+          
+          echo "Enclave dump collection completed"
+        else
+          echo "No enclave name found, skipping dump"
+        fi
+
     - name: Cleanup Kurtosis
       shell: bash
       if: always()
@@ -585,7 +628,7 @@ runs:
       with:
         name: sync-test-${{ inputs.network }}-${{ inputs.el_client }}-${{ inputs.cl_client }}-${{ github.run_number }}
         path: |
-          sync-test-results/
+          enclave-dump/
           reports/
         retention-days: 30
 
