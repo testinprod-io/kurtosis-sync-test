@@ -1,0 +1,10 @@
+{
+  "inputs": {
+    "network": "custom",
+    "custom_network": "my-test-network",
+    "el_clients": "reth",
+    "cl_clients": "teku",
+    "matrix_mode": "single",
+    "wait_time": "300"
+  }
+}

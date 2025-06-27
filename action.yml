@@ -152,12 +152,17 @@ runs:
         if [ -n "${{ inputs.config_file }}" ] && [ "${{ inputs.config_file }}" != "kurtosis-config.yaml" ]; then
           config_file="${{ inputs.config_file }}"
         else
-          # Use network-specific config if available
-          network_config="${{ inputs.network }}/${{ inputs.network }}-${{ inputs.el_client }}.yaml"
-          if [ -f "$network_config" ]; then
-            config_file="$network_config"
+          # Check if this is a fusaka devnet
+          if [[ "${{ inputs.network }}" == fusaka-devnet-* ]]; then
+            config_file="devnet-templates/devnet-template.yaml"
           else
-            config_file="kurtosis-config.yaml"
+            # Use network-specific config if available
+            network_config="${{ inputs.network }}/${{ inputs.network }}-${{ inputs.el_client }}.yaml"
+            if [ -f "$network_config" ]; then
+              config_file="$network_config"
+            else
+              config_file="kurtosis-config.yaml"
+            fi
           fi
         fi
         
@@ -179,13 +184,24 @@ runs:
           # Get EL client image from JSON or use default
           EL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.el_client }}" '.[$client] // empty')
           if [ -z "$EL_IMAGE" ]; then
-            case "${{ inputs.el_client }}" in
-              "geth") export EL_CLIENT_IMAGE="ethereum/client-go:stable" ;;
-              "nethermind") export EL_CLIENT_IMAGE="nethermind/nethermind:latest" ;;
-              "reth") export EL_CLIENT_IMAGE="ghcr.io/paradigmxyz/reth:latest" ;;
-              "besu") export EL_CLIENT_IMAGE="hyperledger/besu:latest" ;;
-              "erigon") export EL_CLIENT_IMAGE="thorax/erigon:devel" ;;
-            esac
+            # Use fusaka-specific images when network is fusaka-devnet-2
+            if [ "${{ inputs.network }}" = "fusaka-devnet-2" ]; then
+              case "${{ inputs.el_client }}" in
+                "geth") export EL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/geth:fusaka-devnet-2" ;;
+                "nethermind") export EL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/nethermind:fusaka-devnet-2" ;;
+                "reth") export EL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/reth:fusaka-devnet-2" ;;
+                "besu") export EL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/besu:fusaka-devnet-2" ;;
+                "erigon") export EL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/erigon:fusaka-devnet-2" ;;
+              esac
+            else
+              case "${{ inputs.el_client }}" in
+                "geth") export EL_CLIENT_IMAGE="ethereum/client-go:stable" ;;
+                "nethermind") export EL_CLIENT_IMAGE="nethermind/nethermind:latest" ;;
+                "reth") export EL_CLIENT_IMAGE="ghcr.io/paradigmxyz/reth:latest" ;;
+                "besu") export EL_CLIENT_IMAGE="hyperledger/besu:latest" ;;
+                "erigon") export EL_CLIENT_IMAGE="thorax/erigon:devel" ;;
+              esac
+            fi
           else
             export EL_CLIENT_IMAGE="$EL_IMAGE"
           fi
@@ -193,14 +209,26 @@ runs:
           # Get CL client image from JSON or use default
           CL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.cl_client }}" '.[$client] // empty')
           if [ -z "$CL_IMAGE" ]; then
-            case "${{ inputs.cl_client }}" in
-              "lighthouse") export CL_CLIENT_IMAGE="sigp/lighthouse:latest" ;;
-              "teku") export CL_CLIENT_IMAGE="consensys/teku:latest" ;;
-              "prysm") export CL_CLIENT_IMAGE="gcr.io/prysmaticlabs/prysm/beacon-chain:stable" ;;
-              "nimbus") export CL_CLIENT_IMAGE="statusim/nimbus-eth2:multiarch-latest" ;;
-              "lodestar") export CL_CLIENT_IMAGE="chainsafe/lodestar:next" ;;
-              "grandine") export CL_CLIENT_IMAGE="sifrai/grandine:develop" ;;
-            esac
+            # Use fusaka-specific images when network is fusaka-devnet-2
+            if [ "${{ inputs.network }}" = "fusaka-devnet-2" ]; then
+              case "${{ inputs.cl_client }}" in
+                "lighthouse") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/lighthouse:fusaka-devnet-2" ;;
+                "teku") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/teku:fusaka-devnet-2" ;;
+                "prysm") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/prysm-beacon-chain:fusaka-devnet-2" ;;
+                "nimbus") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/nimbus-eth2:fusaka-devnet-2" ;;
+                "lodestar") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/lodestar:fusaka-devnet-2" ;;
+                "grandine") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/grandine:fusaka-devnet-2" ;;
+              esac
+            else
+              case "${{ inputs.cl_client }}" in
+                "lighthouse") export CL_CLIENT_IMAGE="sigp/lighthouse:latest" ;;
+                "teku") export CL_CLIENT_IMAGE="consensys/teku:latest" ;;
+                "prysm") export CL_CLIENT_IMAGE="gcr.io/prysmaticlabs/prysm/beacon-chain:stable" ;;
+                "nimbus") export CL_CLIENT_IMAGE="statusim/nimbus-eth2:multiarch-latest" ;;
+                "lodestar") export CL_CLIENT_IMAGE="chainsafe/lodestar:next" ;;
+                "grandine") export CL_CLIENT_IMAGE="sifrai/grandine:develop" ;;
+              esac
+            fi
           else
             export CL_CLIENT_IMAGE="$CL_IMAGE"
           fi
@@ -229,8 +257,6 @@ runs:
           enclave_name="sync-test-${{ inputs.network }}-${{ inputs.el_client }}-${GITHUB_RUN_ID}"
         fi
         
-        # Extract enclave name for peerdas-sync-test format
-        enclave_name="peerdas-sync-${{ inputs.cl_client }}-$(date +%s)"
         echo "enclave_name=$enclave_name" >> $GITHUB_OUTPUT
         
         # Create results directory
@@ -263,31 +289,9 @@ runs:
         echo "  Wait Time: ${{ inputs.wait_time }}s"
         echo
         
-        # Parse custom client images if provided
-        CLIENT_IMAGES='${{ inputs.client_images }}'
-        EL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.el_client }}" '.[$client] // empty')
-        CL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.cl_client }}" '.[$client] // empty')
-        
-        # Build peerdas-sync-test command
-        SYNC_CMD="./peerdas-sync-test.sh"
-        SYNC_CMD="$SYNC_CMD -c ${{ inputs.cl_client }}"
-        SYNC_CMD="$SYNC_CMD -e ${{ inputs.el_client }}"
-        SYNC_CMD="$SYNC_CMD -d ${{ inputs.network }}"
-        SYNC_CMD="$SYNC_CMD -t ${{ inputs.wait_time }}"
-        
-        # Add custom images if provided
-        if [ -n "$EL_IMAGE" ]; then
-          SYNC_CMD="$SYNC_CMD -E $EL_IMAGE"
-        fi
-        if [ -n "$CL_IMAGE" ]; then
-          SYNC_CMD="$SYNC_CMD -i $CL_IMAGE"
-        fi
-        
-        echo "Running sync test with command: $SYNC_CMD"
-        
         # Run the sync test
         start_time=$(date +%s)
-        if timeout 7200 $SYNC_CMD; then
+        if timeout 7200 ./synctest.sh -t ${{ inputs.wait_time }} "$enclave_name" "${{ steps.config.outputs.config_file }}"; then
           test_result="success"
           echo "result=success" >> $GITHUB_OUTPUT
         else
@@ -299,30 +303,31 @@ runs:
         # Calculate duration
         duration=$((end_time - start_time))
         
-        # Database sizes are not collected by peerdas-sync-test
+        # Extract database sizes from CSV files if they exist
         EL_DB_SIZE="N/A"
         CL_DB_SIZE="N/A"
         
-        # Create summary
-        if [ "$test_result" = "success" ]; then
-          summary="${{ inputs.cl_client }}-${{ inputs.el_client }} sync test completed successfully in ${duration}s"
-        else
-          summary="${{ inputs.cl_client }}-${{ inputs.el_client }} sync test FAILED after ${duration}s"
-        fi
-        echo "summary=$summary" >> $GITHUB_OUTPUT
-        
-        # Copy peerdas-sync-test logs if they exist
-        if [ -d "logs/" ]; then
-          echo "Copying peerdas-sync-test logs..."
-          # Find the most recent log directory for this client
-          LOG_DIR=$(ls -td logs/peerdas-sync-${{ inputs.cl_client }}-* 2>/dev/null | head -1)
-          if [ -n "$LOG_DIR" ] && [ -d "$LOG_DIR" ]; then
-            cp -r "$LOG_DIR"/* sync-test-results/ 2>/dev/null || true
-            echo "Copied logs from $LOG_DIR"
+        # Look for CSV files in results directory
+        if ls results/*.csv 1> /dev/null 2>&1; then
+          # Get the most recent CSV file
+          CSV_FILE=$(ls -t results/*.csv | head -n 1)
+          if [ -f "$CSV_FILE" ]; then
+            echo "Extracting database sizes from $CSV_FILE"
+            # Read the last line of the CSV (excluding header)
+            CSV_LINE=$(tail -n 1 "$CSV_FILE")
+            if [ -n "$CSV_LINE" ] && [ "$CSV_LINE" != "EL_DBSize;CL_DBSize;SyncDurationSeconds;StartTimestamp;EndTimestamp" ]; then
+              EL_DB_SIZE=$(echo "$CSV_LINE" | cut -d';' -f1)
+              CL_DB_SIZE=$(echo "$CSV_LINE" | cut -d';' -f2)
+              echo "Found database sizes - EL: $EL_DB_SIZE, CL: $CL_DB_SIZE"
+            fi
           fi
         fi
         
-        # Exit with failure if test failed
+        # Create summary
+        summary="Sync test completed in ${duration}s with result: $test_result"
+        echo "summary=$summary" >> $GITHUB_OUTPUT
+        
+        # Exit with failure if test failed  
         if [ "$test_result" = "failure" ]; then
           echo "::error::Sync test failed for ${{ inputs.cl_client }}-${{ inputs.el_client }}"
           exit 1
@@ -578,7 +583,7 @@ runs:
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: sync-test-results-${{ github.run_number }}
+        name: sync-test-${{ inputs.network }}-${{ inputs.el_client }}-${{ inputs.cl_client }}-${{ github.run_number }}
         path: |
           sync-test-results/
           reports/

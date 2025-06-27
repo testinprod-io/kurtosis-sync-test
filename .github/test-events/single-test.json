@@ -1,0 +1,9 @@
+{
+  "inputs": {
+    "network": "mainnet",
+    "el_clients": "geth",
+    "cl_clients": "lighthouse",
+    "matrix_mode": "single",
+    "wait_time": "1800"
+  }
+}
