@@ -16,7 +16,7 @@ BLUE='\033[0;34m'      # Headers and info
 NC='\033[0m'           # No Color - resets to default
 
 # Default configuration values
-DEVNET="${DEVNET:-fusaka-devnet-1}"                              # Default devnet name (can be overridden)
+DEVNET="${DEVNET:-fusaka-devnet-2}"                              # Default devnet name (can be overridden)
 WAIT_TIME=1800                                                    # Default timeout in seconds (30 minutes)
 SPECIFIC_CLIENT=""                                                # Specific CL client to test (empty = test all)
 CUSTOM_CL_IMAGE=""                                                # Custom Docker image for CL client
@@ -38,12 +38,12 @@ EL_CLIENTS="geth nethermind reth besu erigon"
 # Returns the appropriate ethpandaops Docker image for the given CL client
 get_default_image() {
     case "$1" in
-        "lighthouse") echo "docker.ethquokkaops.io/dh/ethpandaops/lighthouse:unstable" ;;              # Lighthouse unstable
-        "teku") echo "docker.ethquokkaops.io/dh/ethpandaops/teku:master" ;;                    # Teku master branch build
-        "prysm") echo "docker.ethquokkaops.io/dh/ethpandaops/prysm-beacon-chain:fusaka-devnet-1" ;;        # Prysm fusaka-devnet-1
-        "nimbus") echo "docker.ethquokkaops.io/dh/ethpandaops/nimbus-eth2:column-syncer-767aca4" ;;      # Nimbus column syncer
-        "lodestar") echo "docker.ethquokkaops.io/dh/ethpandaops/lodestar:nc-test-peerdas-7917-f34a4af" ;;                   # Lodestar PeerDAS
-        "grandine") echo "docker.ethquokkaops.io/dh/ethpandaops/grandine:peerdas-fulu" ;;      # Grandine PeerDAS Fulu
+        "lighthouse") echo "docker.ethquokkaops.io/dh/ethpandaops/lighthouse:fusaka-devnet-2" ;;              # Lighthouse fusaka-devnet-2
+        "teku") echo "docker.ethquokkaops.io/dh/ethpandaops/teku:fusaka-devnet-2" ;;                    # Teku fusaka-devnet-2
+        "prysm") echo "docker.ethquokkaops.io/dh/ethpandaops/prysm-beacon-chain:fusaka-devnet-2" ;;        # Prysm fusaka-devnet-2
+        "nimbus") echo "docker.ethquokkaops.io/dh/ethpandaops/nimbus-eth2:fusaka-devnet-2" ;;      # Nimbus fusaka-devnet-2
+        "lodestar") echo "docker.ethquokkaops.io/dh/ethpandaops/lodestar:fusaka-devnet-2" ;;                   # Lodestar fusaka-devnet-2
+        "grandine") echo "docker.ethquokkaops.io/dh/ethpandaops/grandine:fusaka-devnet-2" ;;      # Grandine fusaka-devnet-2
         *) echo "" ;;                                                          # Return empty for unknown clients
     esac
 }
@@ -53,12 +53,12 @@ get_default_image() {
 # Returns the appropriate ethpandaops Docker image for the given EL client
 get_default_el_image() {
     case "$1" in
-        "geth") echo "docker.ethquokkaops.io/dh/ethpandaops/geth:fusaka-devnet-1" ;;                    # Geth fusaka-devnet-1
-        "nethermind") echo "docker.ethquokkaops.io/dh/ethpandaops/nethermind:fusaka-c98b792" ;;               # Nethermind fusaka
-        "reth") echo "docker.ethquokkaops.io/dh/ethpandaops/reth:fusaka-devnet1" ;;                     # Reth fusaka-devnet1
-        "besu") echo "docker.ethquokkaops.io/dh/ethpandaops/besu:fusaka-devnet-1" ;;            # Besu fusaka-devnet-1
-        "erigon") echo "docker.ethquokkaops.io/dh/ethpandaops/erigon:fusaka-devnet-1" ;;        # Erigon fusaka-devnet-1
-        *) echo "docker.ethquokkaops.io/dh/ethpandaops/geth:fusaka-devnet-1" ;;                         # Default to geth if unknown
+        "geth") echo "docker.ethquokkaops.io/dh/ethpandaops/geth:fusaka-devnet-2" ;;                    # Geth fusaka-devnet-2
+        "nethermind") echo "docker.ethquokkaops.io/dh/ethpandaops/nethermind:fusaka-devnet-2" ;;               # Nethermind fusaka-devnet-2
+        "reth") echo "docker.ethquokkaops.io/dh/ethpandaops/reth:fusaka-devnet-2" ;;                     # Reth fusaka-devnet-2
+        "besu") echo "docker.ethquokkaops.io/dh/ethpandaops/besu:fusaka-devnet-2" ;;            # Besu fusaka-devnet-2
+        "erigon") echo "docker.ethquokkaops.io/dh/ethpandaops/erigon:fusaka-devnet-2" ;;        # Erigon fusaka-devnet-2
+        *) echo "docker.ethquokkaops.io/dh/ethpandaops/geth:fusaka-devnet-2" ;;                         # Default to geth if unknown
     esac
 }
 
@@ -83,7 +83,7 @@ show_help() {
     echo "  -i <image>     Use custom Docker image for the CL client"
     echo "  -e <client>    Use specific EL client (geth, nethermind, reth, besu, erigon) (default: geth)"
     echo "  -E <image>     Use custom Docker image for the EL client"
-    echo "  -d <devnet>    Specify devnet to use (default: fusaka-devnet-1)"
+    echo "  -d <devnet>    Specify devnet to use (default: fusaka-devnet-2)"
     echo "  -t <timeout>   Set timeout in seconds (default: 1800)"
     echo "  --genesis-sync Use genesis sync instead of checkpoint sync (default: checkpoint sync)"
     echo "  -h             Show this help message"
@@ -94,8 +94,8 @@ show_help() {
     echo "  $0 -c teku -i consensys/teku:develop  # Test Teku with custom image"
     echo "  $0 -e nethermind                      # Test all CL clients with Nethermind"
     echo "  $0 -c lighthouse -e reth              # Test Lighthouse with Reth"
-    echo "  $0 -d fusaka-devnet-0                 # Test with fusaka-devnet-0"
-    echo "  $0 -c lighthouse -d fusaka-devnet-2   # Test Lighthouse with fusaka-devnet-2"
+    echo "  $0 -t 2400                             # Test with custom timeout"
+    echo "  $0 -c lighthouse -e nethermind         # Test Lighthouse with Nethermind"
     echo "  $0 -c teku -e besu -E hyperledger/besu:develop  # Test Teku with custom Besu image"
     echo "  $0 -c lighthouse --genesis-sync      # Test Lighthouse with genesis sync"
     exit 0

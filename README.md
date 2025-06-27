@@ -45,21 +45,21 @@ Instead of using `make run`, you can manually invoke the `synctest.sh` script wi
 
 ## PeerDAS Sync Test
 
-The `peerdas-sync-test.sh` script is designed to test Consensus Layer (CL) clients' synchronization capabilities on PeerDAS-enabled devnets (default: fusaka-devnet-1).
+The `peerdas-sync-test.sh` script is designed to test Consensus Layer (CL) clients' synchronization capabilities on PeerDAS-enabled devnets (default: fusaka-devnet-2).
 
 ### Using Different Devnets
 
-By default, the script uses `fusaka-devnet-1`. To test against a different devnet, use the `-d` flag:
+The script uses `fusaka-devnet-2` for PeerDAS testing:
 
 ```sh
-# Test against fusaka-devnet-0
-./peerdas-sync-test.sh -d fusaka-devnet-0
+# Test all CL clients
+./peerdas-sync-test.sh
 
-# Test against fusaka-devnet-2 with lighthouse
-./peerdas-sync-test.sh -c lighthouse -d fusaka-devnet-2
+# Test with lighthouse
+./peerdas-sync-test.sh -c lighthouse
 
-# Using make with a different devnet
-make peerdas-test ARGS="-c teku -d fusaka-devnet-0"
+# Using make
+make peerdas-test ARGS="-c teku"
 ```
 
 **Note:** The script uses a single generic template file (`devnet-templates/devnet-template.yaml`) that automatically adapts to the specified devnet.
@@ -81,8 +81,8 @@ make peerdas-test ARGS="-c teku -i consensys/teku:custom-branch"
 # Test with a specific EL client
 make peerdas-test ARGS="-c lighthouse -e nethermind"
 
-# Test with a different devnet
-make peerdas-test ARGS="-d fusaka-devnet-0"
+# Test with specific timeout
+make peerdas-test ARGS="-t 2400"
 
 # Use genesis sync instead of checkpoint sync
 make peerdas-test ARGS="-c lighthouse --genesis-sync"
@@ -109,8 +109,8 @@ make peerdas-test ARGS="-h"
 # Test with a specific EL client (default is geth)
 ./peerdas-sync-test.sh -c lighthouse -e nethermind
 
-# Test with a different devnet
-./peerdas-sync-test.sh -d fusaka-devnet-0
+# Test with specific timeout
+./peerdas-sync-test.sh -t 2400
 
 # Use genesis sync instead of checkpoint sync
 ./peerdas-sync-test.sh -c lighthouse --genesis-sync
@@ -125,7 +125,7 @@ make peerdas-test ARGS="-h"
 - `-i <image>`: Use custom Docker image for the CL client
 - `-e <client>`: Use specific EL client (geth, nethermind, reth, besu, erigon) (default: geth)
 - `-E <image>`: Use custom Docker image for the EL client
-- `-d <devnet>`: Specify devnet to use (default: fusaka-devnet-1)
+- `-d <devnet>`: Specify devnet to use (default: fusaka-devnet-2)
 - `-t <timeout>`: Set timeout in seconds (default: 1800)
 - `--genesis-sync`: Use genesis sync instead of checkpoint sync (default: checkpoint sync)
 - `-h`: Show help message

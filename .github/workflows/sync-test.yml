@@ -8,12 +8,12 @@ on:
         required: true
         type: choice
         options:
-          - fusaka-devnet-1
+          - fusaka-devnet-2
           - mainnet
           - sepolia
           - hoodi
           - custom
-        default: 'fusaka-devnet-1'
+        default: 'fusaka-devnet-2'
       
       custom_network:
         description: 'Custom network name (only used if network is "custom")'
@@ -53,7 +53,7 @@ on:
         default: 'single'
       
       client_images:
-        description: 'Custom client images as JSON (e.g., {"geth":"ethereum/client-go:v1.13.0","lighthouse":"sigp/lighthouse:v4.5.0"})'
+        description: 'Custom client images as JSON (e.g., {"geth":"docker.ethquokkaops.io/dh/ethpandaops/geth:fusaka-devnet-2","lighthouse":"docker.ethquokkaops.io/dh/ethpandaops/lighthouse:fusaka-devnet-2"})'
         required: false
         type: string
         default: '{}'
@@ -86,7 +86,7 @@ jobs:
         id: set-network
         run: |
           if [ "${{ github.event_name }}" == "schedule" ]; then
-            echo "network=fusaka-devnet-1" >> $GITHUB_OUTPUT
+            echo "network=fusaka-devnet-2" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.inputs.network }}" == "custom" ]; then
             echo "network=${{ github.event.inputs.custom_network }}" >> $GITHUB_OUTPUT
           else
@@ -172,7 +172,7 @@ jobs:
         id: config
         run: |
           NETWORK="${{ needs.setup-matrix.outputs.network }}"
-          if [ "$NETWORK" == "fusaka-devnet-1" ]; then
+          if [ "$NETWORK" == "fusaka-devnet-2" ]; then
             echo "config_file=devnet-templates/devnet-template.yaml" >> $GITHUB_OUTPUT
           elif [ -f "${NETWORK}/${NETWORK}-${{ matrix.el_client }}.yaml" ]; then
             echo "config_file=${NETWORK}/${NETWORK}-${{ matrix.el_client }}.yaml" >> $GITHUB_OUTPUT
