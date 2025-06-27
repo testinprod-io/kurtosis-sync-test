@@ -96,6 +96,7 @@ jobs:
       - name: Parse clients and create matrix
         id: set-matrix
         run: |
+          set -x  # Enable debug output
           # For scheduled runs, use default matrix
           if [ "${{ github.event_name }}" == "schedule" ]; then
             MATRIX_JSON='{"include":[{"el_client":"geth","cl_client":"lighthouse"},{"el_client":"nethermind","cl_client":"teku"},{"el_client":"reth","cl_client":"lighthouse"},{"el_client":"besu","cl_client":"teku"}]}'
@@ -123,7 +124,7 @@ jobs:
               else
                 EL_ARRAY="$EL_ARRAY $el"
               fi
-              ((EL_COUNT++))
+              EL_COUNT=$((EL_COUNT + 1))
             fi
           done
           
@@ -138,7 +139,7 @@ jobs:
               else
                 CL_ARRAY="$CL_ARRAY $cl"
               fi
-              ((CL_COUNT++))
+              CL_COUNT=$((CL_COUNT + 1))
             fi
           done
           IFS="$OLD_IFS"
@@ -158,10 +159,10 @@ jobs:
                 if [ "$FIRST" = true ]; then
                   FIRST=false
                 else
-                  MATRIX_JSON+=','
+                  MATRIX_JSON="${MATRIX_JSON},"
                 fi
-                MATRIX_JSON+="{\"el_client\":\"$el\",\"cl_client\":\"$cl\"}"
-                ((TEST_COUNT++))
+                MATRIX_JSON="${MATRIX_JSON}{\"el_client\":\"$el\",\"cl_client\":\"$cl\"}"
+                TEST_COUNT=$((TEST_COUNT + 1))
               done
             done
           else
@@ -173,13 +174,13 @@ jobs:
             if [ "$FIRST" = true ]; then
               FIRST=false
             else
-              MATRIX_JSON+=','
+              MATRIX_JSON="${MATRIX_JSON},"
             fi
-            MATRIX_JSON+="{\"el_client\":\"$FIRST_EL\",\"cl_client\":\"$FIRST_CL\"}"
+            MATRIX_JSON="${MATRIX_JSON}{\"el_client\":\"$FIRST_EL\",\"cl_client\":\"$FIRST_CL\"}"
             TEST_COUNT=1
           fi
           
-          MATRIX_JSON+=']}'
+          MATRIX_JSON="${MATRIX_JSON}]}"
           
           echo "Generated matrix: $MATRIX_JSON"
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
