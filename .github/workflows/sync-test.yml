@@ -109,17 +109,31 @@ jobs:
           CL_CLIENTS="${{ github.event.inputs.cl_clients }}"
           MATRIX_MODE="${{ github.event.inputs.matrix_mode }}"
           
-          # Convert to arrays
-          IFS=',' read -ra EL_ARRAY <<< "$EL_CLIENTS"
-          IFS=',' read -ra CL_ARRAY <<< "$CL_CLIENTS"
+          # Convert to arrays - using portable approach
+          EL_ARRAY=()
+          CL_ARRAY=()
           
-          # Trim whitespace from each element
-          for i in "${!EL_ARRAY[@]}"; do
-            EL_ARRAY[$i]=$(echo "${EL_ARRAY[$i]}" | xargs)
+          # Parse EL clients
+          OLD_IFS="$IFS"
+          IFS=','
+          for el in $EL_CLIENTS; do
+            el=$(echo "$el" | xargs)  # Trim whitespace
+            if [ -n "$el" ]; then
+              EL_ARRAY+=("$el")
+            fi
           done
-          for i in "${!CL_ARRAY[@]}"; do
-            CL_ARRAY[$i]=$(echo "${CL_ARRAY[$i]}" | xargs)
+          
+          # Parse CL clients
+          for cl in $CL_CLIENTS; do
+            cl=$(echo "$cl" | xargs)  # Trim whitespace
+            if [ -n "$cl" ]; then
+              CL_ARRAY+=("$cl")
+            fi
           done
+          IFS="$OLD_IFS"
+          
+          echo "EL clients: ${EL_ARRAY[@]}"
+          echo "CL clients: ${CL_ARRAY[@]}"
           
           # Create matrix based on mode
           MATRIX_JSON='{"include":['
