@@ -229,6 +229,8 @@ runs:
           enclave_name="sync-test-${{ inputs.network }}-${{ inputs.el_client }}-${GITHUB_RUN_ID}"
         fi
         
+        # Extract enclave name for peerdas-sync-test format
+        enclave_name="peerdas-sync-${{ inputs.cl_client }}-$(date +%s)"
         echo "enclave_name=$enclave_name" >> $GITHUB_OUTPUT
         
         # Create results directory
@@ -261,9 +263,31 @@ runs:
         echo "  Wait Time: ${{ inputs.wait_time }}s"
         echo
         
+        # Parse custom client images if provided
+        CLIENT_IMAGES='${{ inputs.client_images }}'
+        EL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.el_client }}" '.[$client] // empty')
+        CL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.cl_client }}" '.[$client] // empty')
+        
+        # Build peerdas-sync-test command
+        SYNC_CMD="./peerdas-sync-test.sh"
+        SYNC_CMD="$SYNC_CMD -c ${{ inputs.cl_client }}"
+        SYNC_CMD="$SYNC_CMD -e ${{ inputs.el_client }}"
+        SYNC_CMD="$SYNC_CMD -d ${{ inputs.network }}"
+        SYNC_CMD="$SYNC_CMD -t ${{ inputs.wait_time }}"
+        
+        # Add custom images if provided
+        if [ -n "$EL_IMAGE" ]; then
+          SYNC_CMD="$SYNC_CMD -E $EL_IMAGE"
+        fi
+        if [ -n "$CL_IMAGE" ]; then
+          SYNC_CMD="$SYNC_CMD -i $CL_IMAGE"
+        fi
+        
+        echo "Running sync test with command: $SYNC_CMD"
+        
         # Run the sync test
         start_time=$(date +%s)
-        if timeout 7200 ./synctest.sh -t ${{ inputs.wait_time }} "$enclave_name" "${{ steps.config.outputs.config_file }}"; then
+        if timeout 7200 $SYNC_CMD; then
           test_result="success"
           echo "result=success" >> $GITHUB_OUTPUT
         else
@@ -275,29 +299,34 @@ runs:
         # Calculate duration
         duration=$((end_time - start_time))
         
-        # Extract database sizes from CSV files if they exist
+        # Database sizes are not collected by peerdas-sync-test
         EL_DB_SIZE="N/A"
         CL_DB_SIZE="N/A"
         
-        # Look for CSV files in results directory
-        if ls results/*.csv 1> /dev/null 2>&1; then
-          # Get the most recent CSV file
-          CSV_FILE=$(ls -t results/*.csv | head -n 1)
-          if [ -f "$CSV_FILE" ]; then
-            echo "Extracting database sizes from $CSV_FILE"
-            # Read the last line of the CSV (excluding header)
-            CSV_LINE=$(tail -n 1 "$CSV_FILE")
-            if [ -n "$CSV_LINE" ] && [ "$CSV_LINE" != "EL_DBSize;CL_DBSize;SyncDurationSeconds;StartTimestamp;EndTimestamp" ]; then
-              EL_DB_SIZE=$(echo "$CSV_LINE" | cut -d';' -f1)
-              CL_DB_SIZE=$(echo "$CSV_LINE" | cut -d';' -f2)
-              echo "Found database sizes - EL: $EL_DB_SIZE, CL: $CL_DB_SIZE"
-            fi
+        # Create summary
+        if [ "$test_result" = "success" ]; then
+          summary="${{ inputs.cl_client }}-${{ inputs.el_client }} sync test completed successfully in ${duration}s"
+        else
+          summary="${{ inputs.cl_client }}-${{ inputs.el_client }} sync test FAILED after ${duration}s"
+        fi
+        echo "summary=$summary" >> $GITHUB_OUTPUT
+        
+        # Copy peerdas-sync-test logs if they exist
+        if [ -d "logs/" ]; then
+          echo "Copying peerdas-sync-test logs..."
+          # Find the most recent log directory for this client
+          LOG_DIR=$(ls -td logs/peerdas-sync-${{ inputs.cl_client }}-* 2>/dev/null | head -1)
+          if [ -n "$LOG_DIR" ] && [ -d "$LOG_DIR" ]; then
+            cp -r "$LOG_DIR"/* sync-test-results/ 2>/dev/null || true
+            echo "Copied logs from $LOG_DIR"
           fi
         fi
         
-        # Create summary
-        summary="Sync test completed in ${duration}s with result: $test_result"
-        echo "summary=$summary" >> $GITHUB_OUTPUT
+        # Exit with failure if test failed
+        if [ "$test_result" = "failure" ]; then
+          echo "::error::Sync test failed for ${{ inputs.cl_client }}-${{ inputs.el_client }}"
+          exit 1
+        fi
         
         # Save test metadata
         cat > sync-test-results/metadata.json << EOF
