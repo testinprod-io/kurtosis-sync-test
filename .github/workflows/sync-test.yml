@@ -209,12 +209,13 @@ jobs:
       
       - name: Upload test results
         uses: actions/upload-artifact@v4
-        if: always() && needs.setup-matrix.outputs.test_count > 1
+        if: always()
         with:
           name: sync-test-${{ needs.setup-matrix.outputs.network }}-${{ matrix.el_client }}-${{ matrix.cl_client }}
           path: |
             sync-test-results/
             reports/
+            enclave-dump/
           retention-days: 7
       
       - name: Display test summary

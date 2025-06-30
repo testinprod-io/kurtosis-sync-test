@@ -622,15 +622,7 @@ runs:
         echo "html_path=reports/index.html" >> $GITHUB_OUTPUT
         echo "Generated HTML report at reports/index.html"
 
-    - name: Upload test artifacts
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: sync-test-${{ inputs.network }}-${{ inputs.el_client }}-${{ inputs.cl_client }}-${{ github.run_number }}
-        path: |
-          enclave-dump/
-          reports/
-        retention-days: 30
+    # Note: Artifact upload is handled by the calling workflow to avoid conflicts
 
     - name: Save results to data branch
       if: inputs.save_to_data_branch == 'true'
