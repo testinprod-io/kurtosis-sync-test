@@ -187,18 +187,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Determine config file
-        id: config
-        run: |
-          NETWORK="${{ needs.setup-matrix.outputs.network }}"
-          if [ "$NETWORK" == "fusaka-devnet-2" ]; then
-            echo "config_file=devnet-templates/devnet-template.yaml" >> $GITHUB_OUTPUT
-          elif [ -f "${NETWORK}/${NETWORK}-${{ matrix.el_client }}.yaml" ]; then
-            echo "config_file=${NETWORK}/${NETWORK}-${{ matrix.el_client }}.yaml" >> $GITHUB_OUTPUT
-          else
-            echo "config_file=" >> $GITHUB_OUTPUT
-          fi
-      
       - name: Run sync test
         uses: ./
         id: sync-test
@@ -210,7 +198,6 @@ jobs:
           enclave_name: ${{ github.event.inputs.enclave_name || format('sync-{0}-{1}-{2}-{3}', needs.setup-matrix.outputs.network, matrix.el_client, matrix.cl_client, github.run_number) }}
           generate_html_report: 'false'
           save_to_data_branch: 'true'
-          config_file: ${{ steps.config.outputs.config_file }}
           client_images: ${{ github.event.inputs.client_images || '{}' }}
       
       - name: Upload test results
