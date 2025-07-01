@@ -8,10 +8,6 @@ inputs:
     required: false
     default: ''
   
-  config_file:
-    description: 'Path to the configuration file relative to repository root'
-    required: false
-    default: 'kurtosis-config.yaml'
   
   network:
     description: 'Network to test (any network name)'
@@ -130,7 +126,7 @@ runs:
           sudo apt-get update && sudo apt-get install -y gettext-base
         fi
 
-    - name: Install Kurtosis
+    - name: Install Kurtosis and fetch images
       shell: bash
       run: |
         echo "Installing Kurtosis CLI..."
@@ -144,188 +140,152 @@ runs:
         
         # Verify installation
         kurtosis version
+        echo "$(dirname $(which kurtosis))" >> $GITHUB_PATH
 
-    - name: Determine configuration file
+        # Get the installed version and save it as an environment variable
+        KURTOSIS_VERSION=$(kurtosis version | grep -o 'Version:[[:space:]]*[^[:space:]]*' | cut -d':' -f2 | tr -d ' ')
+        echo "KURTOSIS_VERSION=$KURTOSIS_VERSION" >> $GITHUB_ENV
+        echo "Installed Kurtosis version: $KURTOSIS_VERSION"
+
+        # Extract tool versions from Kurtosis source code with fallbacks
+        echo "Fetching tool versions from Kurtosis source..."
+
+        TRAEFIK_VERSION=$(curl -sf https://raw.githubusercontent.com/kurtosis-tech/kurtosis/main/container-engine-lib/lib/backend_impls/docker/docker_kurtosis_backend/reverse_proxy_functions/implementations/traefik/consts.go | grep 'containerImage.*=.*"traefik:' | sed 's/.*traefik:\([^"]*\)".*/\1/')
+        VECTOR_VERSION=$(curl -sf https://raw.githubusercontent.com/kurtosis-tech/kurtosis/main/container-engine-lib/lib/backend_impls/docker/docker_kurtosis_backend/logs_aggregator_functions/implementations/vector/consts.go | grep 'containerImage.*=.*"timberio/vector:' | sed 's/.*timberio\/vector:\([^"]*\)".*/\1/')
+        FLUENTBIT_VERSION=$(curl -sf https://raw.githubusercontent.com/kurtosis-tech/kurtosis/main/container-engine-lib/lib/backend_impls/docker/docker_kurtosis_backend/logs_collector_functions/implementations/fluentbit/consts.go | grep 'containerImage.*=.*"fluent/fluent-bit:' | sed 's/.*fluent\/fluent-bit:\([^"]*\)".*/\1/')
+        ALPINE_VERSION=$(curl -sf https://raw.githubusercontent.com/kurtosis-tech/kurtosis/main/container-engine-lib/lib/backend_impls/docker/docker_kurtosis_backend/logs_collector_functions/implementations/fluentbit/fluentbit_configuration_creator.go | grep 'configuratorContainerImage.*=.*"alpine:' | sed 's/.*alpine:\([^"]*\)".*/\1/')
+
+        echo "TRAEFIK_VERSION=$TRAEFIK_VERSION" >> $GITHUB_ENV
+        echo "VECTOR_VERSION=$VECTOR_VERSION" >> $GITHUB_ENV
+        echo "FLUENTBIT_VERSION=$FLUENTBIT_VERSION" >> $GITHUB_ENV
+        echo "ALPINE_VERSION=$ALPINE_VERSION" >> $GITHUB_ENV
+
+        echo "Tool versions extracted:"
+        echo "  Traefik: $TRAEFIK_VERSION"
+        echo "  Vector: $VECTOR_VERSION"
+        echo "  Fluent-bit: $FLUENTBIT_VERSION"
+        echo "  Alpine: $ALPINE_VERSION"
+
+        # Pull images in parallel
+        echo "Starting parallel docker pulls..."
+        docker pull docker.ethquokkaops.io/dh/kurtosistech/engine:$KURTOSIS_VERSION &
+        docker pull docker.ethquokkaops.io/dh/kurtosistech/files-artifacts-expander:$KURTOSIS_VERSION &
+        docker pull docker.ethquokkaops.io/dh/kurtosistech/core:$KURTOSIS_VERSION &
+        docker pull docker.ethquokkaops.io/dh/timberio/vector:$VECTOR_VERSION &
+        docker pull docker.ethquokkaops.io/dh/fluent/fluent-bit:$FLUENTBIT_VERSION &
+        docker pull docker.ethquokkaops.io/dh/alpine:$ALPINE_VERSION &
+        docker pull docker.ethquokkaops.io/dh/traefik:$TRAEFIK_VERSION &
+        docker pull docker.ethquokkaops.io/dh/badouralix/curl-jq &
+        docker pull docker.ethquokkaops.io/dh/busybox:latest &
+
+        # Wait for all pulls to complete
+        wait
+        echo "All docker pulls completed"
+
+        # Tag images sequentially (fast operation)
+        docker tag docker.ethquokkaops.io/dh/kurtosistech/engine:$KURTOSIS_VERSION kurtosistech/engine:$KURTOSIS_VERSION
+        docker tag docker.ethquokkaops.io/dh/kurtosistech/files-artifacts-expander:$KURTOSIS_VERSION kurtosistech/files-artifacts-expander:$KURTOSIS_VERSION
+        docker tag docker.ethquokkaops.io/dh/kurtosistech/core:$KURTOSIS_VERSION kurtosistech/core:$KURTOSIS_VERSION
+        docker tag docker.ethquokkaops.io/dh/timberio/vector:$VECTOR_VERSION timberio/vector:$VECTOR_VERSION
+        docker tag docker.ethquokkaops.io/dh/fluent/fluent-bit:$FLUENTBIT_VERSION fluent/fluent-bit:$FLUENTBIT_VERSION
+        docker tag docker.ethquokkaops.io/dh/alpine:$ALPINE_VERSION alpine:$ALPINE_VERSION
+        docker tag docker.ethquokkaops.io/dh/traefik:$TRAEFIK_VERSION traefik:$TRAEFIK_VERSION
+        docker tag docker.ethquokkaops.io/dh/badouralix/curl-jq badouralix/curl-jq
+        docker tag docker.ethquokkaops.io/dh/busybox:latest busybox:latest
+
+    - name: Parse client images
       shell: bash
-      id: config
+      id: parse-images
       run: |
-        if [ -n "${{ inputs.config_file }}" ] && [ "${{ inputs.config_file }}" != "kurtosis-config.yaml" ]; then
-          config_file="${{ inputs.config_file }}"
+        # Parse client images JSON to extract custom images
+        CLIENT_IMAGES='${{ inputs.client_images }}'
+        
+        # Extract CL client image from JSON
+        CL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.cl_client }}" '.[$client] // empty')
+        if [ -n "$CL_IMAGE" ]; then
+          echo "cl_image=$CL_IMAGE" >> $GITHUB_OUTPUT
         else
-          # Check if this is a fusaka devnet
-          if [[ "${{ inputs.network }}" == fusaka-devnet-* ]]; then
-            config_file="devnet-templates/devnet-template.yaml"
-          else
-            # Use network-specific config if available
-            network_config="${{ inputs.network }}/${{ inputs.network }}-${{ inputs.el_client }}.yaml"
-            if [ -f "$network_config" ]; then
-              config_file="$network_config"
-            else
-              config_file="kurtosis-config.yaml"
-            fi
-          fi
+          echo "cl_image=" >> $GITHUB_OUTPUT
         fi
         
-        # Check if using devnet template
-        if [ "$config_file" = "devnet-templates/devnet-template.yaml" ]; then
-          # Create a temporary config file with substituted values
-          temp_config="/tmp/devnet-config-${GITHUB_RUN_ID}.yaml"
-          
-          # Set default values for template variables
-          export EL_CLIENT_TYPE="${{ inputs.el_client }}"
-          export CL_CLIENT_TYPE="${{ inputs.cl_client }}"
-          export DEVNET="${{ inputs.network }}"
-          export NAT_EXIT_IP="127.0.0.1"
-          export CHECKPOINT_SYNC="true"
-          
-          # Parse client images JSON
-          CLIENT_IMAGES='${{ inputs.client_images }}'
-          
-          # Get EL client image from JSON or use default
-          EL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.el_client }}" '.[$client] // empty')
-          if [ -z "$EL_IMAGE" ]; then
-            # Use fusaka-specific images when network is fusaka-devnet-2
-            if [ "${{ inputs.network }}" = "fusaka-devnet-2" ]; then
-              case "${{ inputs.el_client }}" in
-                "geth") export EL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/geth:fusaka-devnet-2" ;;
-                "nethermind") export EL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/nethermind:fusaka-devnet-2" ;;
-                "reth") export EL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/reth:fusaka-devnet-2" ;;
-                "besu") export EL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/besu:fusaka-devnet-2" ;;
-                "erigon") export EL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/erigon:fusaka-devnet-2" ;;
-              esac
-            else
-              case "${{ inputs.el_client }}" in
-                "geth") export EL_CLIENT_IMAGE="ethereum/client-go:stable" ;;
-                "nethermind") export EL_CLIENT_IMAGE="nethermind/nethermind:latest" ;;
-                "reth") export EL_CLIENT_IMAGE="ghcr.io/paradigmxyz/reth:latest" ;;
-                "besu") export EL_CLIENT_IMAGE="hyperledger/besu:latest" ;;
-                "erigon") export EL_CLIENT_IMAGE="thorax/erigon:devel" ;;
-              esac
-            fi
-          else
-            export EL_CLIENT_IMAGE="$EL_IMAGE"
-          fi
-          
-          # Get CL client image from JSON or use default
-          CL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.cl_client }}" '.[$client] // empty')
-          if [ -z "$CL_IMAGE" ]; then
-            # Use fusaka-specific images when network is fusaka-devnet-2
-            if [ "${{ inputs.network }}" = "fusaka-devnet-2" ]; then
-              case "${{ inputs.cl_client }}" in
-                "lighthouse") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/lighthouse:fusaka-devnet-2" ;;
-                "teku") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/teku:fusaka-devnet-2" ;;
-                "prysm") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/prysm-beacon-chain:fusaka-devnet-2" ;;
-                "nimbus") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/nimbus-eth2:fusaka-devnet-2" ;;
-                "lodestar") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/lodestar:fusaka-devnet-2" ;;
-                "grandine") export CL_CLIENT_IMAGE="docker.ethquokkaops.io/dh/ethpandaops/grandine:fusaka-devnet-2" ;;
-              esac
-            else
-              case "${{ inputs.cl_client }}" in
-                "lighthouse") export CL_CLIENT_IMAGE="sigp/lighthouse:latest" ;;
-                "teku") export CL_CLIENT_IMAGE="consensys/teku:latest" ;;
-                "prysm") export CL_CLIENT_IMAGE="gcr.io/prysmaticlabs/prysm/beacon-chain:stable" ;;
-                "nimbus") export CL_CLIENT_IMAGE="statusim/nimbus-eth2:multiarch-latest" ;;
-                "lodestar") export CL_CLIENT_IMAGE="chainsafe/lodestar:next" ;;
-                "grandine") export CL_CLIENT_IMAGE="sifrai/grandine:develop" ;;
-              esac
-            fi
-          else
-            export CL_CLIENT_IMAGE="$CL_IMAGE"
-          fi
-          
-          # Substitute variables in template
-          envsubst < "$config_file" > "$temp_config"
-          config_file="$temp_config"
+        # Extract EL client image from JSON
+        EL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.el_client }}" '.[$client] // empty')
+        if [ -n "$EL_IMAGE" ]; then
+          echo "el_image=$EL_IMAGE" >> $GITHUB_OUTPUT
+        else
+          echo "el_image=" >> $GITHUB_OUTPUT
         fi
-        
-        if [ ! -f "$config_file" ]; then
-          echo "Error: Configuration file '$config_file' not found"
-          exit 1
-        fi
-        
-        echo "config_file=$config_file" >> $GITHUB_OUTPUT
-        echo "Using configuration file: $config_file"
 
     - name: Run sync test
       shell: bash
       id: sync-test
       run: |
-        # Determine enclave name
-        if [ -n "${{ inputs.enclave_name }}" ]; then
-          enclave_name="${{ inputs.enclave_name }}"
-        else
-          enclave_name="sync-test-${{ inputs.network }}-${{ inputs.el_client }}-${GITHUB_RUN_ID}"
-        fi
-        
-        echo "enclave_name=$enclave_name" >> $GITHUB_OUTPUT
-        
         # Create results directory
         mkdir -p sync-test-results
-        
-        # Set up logging
-        exec > >(tee -a sync-test-results/test.log) 2>&1
+        mkdir -p logs
         
         echo "Starting sync test with:"
-        echo "  Enclave: $enclave_name"
-        echo "  Config: ${{ steps.config.outputs.config_file }}"
         echo "  Network: ${{ inputs.network }}"
         echo "  EL Client: ${{ inputs.el_client }}"
         echo "  CL Client: ${{ inputs.cl_client }}"
         
         # Show custom images if provided
-        if [ "${{ inputs.client_images }}" != "{}" ] && [ -n "${{ inputs.client_images }}" ]; then
+        if [ -n "${{ steps.parse-images.outputs.cl_image }}" ] || [ -n "${{ steps.parse-images.outputs.el_image }}" ]; then
           echo "  Custom Images:"
-          CLIENT_IMAGES='${{ inputs.client_images }}'
-          EL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.el_client }}" '.[$client] // empty')
-          CL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.cl_client }}" '.[$client] // empty')
-          if [ -n "$EL_IMAGE" ]; then
-            echo "    ${{ inputs.el_client }}: $EL_IMAGE"
+          if [ -n "${{ steps.parse-images.outputs.el_image }}" ]; then
+            echo "    ${{ inputs.el_client }}: ${{ steps.parse-images.outputs.el_image }}"
           fi
-          if [ -n "$CL_IMAGE" ]; then
-            echo "    ${{ inputs.cl_client }}: $CL_IMAGE"
+          if [ -n "${{ steps.parse-images.outputs.cl_image }}" ]; then
+            echo "    ${{ inputs.cl_client }}: ${{ steps.parse-images.outputs.cl_image }}"
           fi
         fi
         
         echo "  Wait Time: ${{ inputs.wait_time }}s"
         echo
         
-        # Run the sync test
+        # Build peerdas-sync-test.sh command
+        cmd="./peerdas-sync-test.sh"
+        cmd="$cmd -d ${{ inputs.network }}"
+        cmd="$cmd -e ${{ inputs.el_client }}"
+        cmd="$cmd -c ${{ inputs.cl_client }}"
+        cmd="$cmd -t ${{ inputs.wait_time }}"
+        cmd="$cmd --always-collect-logs"  # Always collect logs for GitHub Actions
+        
+        # Add custom images if provided
+        if [ -n "${{ steps.parse-images.outputs.cl_image }}" ]; then
+          cmd="$cmd -i '${{ steps.parse-images.outputs.cl_image }}'"
+        fi
+        if [ -n "${{ steps.parse-images.outputs.el_image }}" ]; then
+          cmd="$cmd -E '${{ steps.parse-images.outputs.el_image }}'"
+        fi
+        
+        echo "Running command: $cmd"
+        
+        # Run the sync test and capture output
         start_time=$(date +%s)
-        if timeout 7200 ./synctest.sh -t ${{ inputs.wait_time }} "$enclave_name" "${{ steps.config.outputs.config_file }}"; then
+        if eval "$cmd" 2>&1 | tee sync-test-results/test.log; then
           test_result="success"
-          echo "result=success" >> $GITHUB_OUTPUT
+          echo "test_result=success" >> $GITHUB_OUTPUT
         else
           test_result="failure"
-          echo "result=failure" >> $GITHUB_OUTPUT
+          echo "test_result=failure" >> $GITHUB_OUTPUT
         fi
         end_time=$(date +%s)
+        
+        # Extract enclave name from the log output
+        enclave_name=$(grep -oP 'Starting Kurtosis enclave: \K[^ ]+' sync-test-results/test.log | head -1 || echo "peerdas-sync-unknown")
+        echo "enclave_name=$enclave_name" >> $GITHUB_OUTPUT
         
         # Calculate duration
         duration=$((end_time - start_time))
         
-        # Extract database sizes from CSV files if they exist
+        # Database sizes not available from peerdas-sync-test.sh
         EL_DB_SIZE="N/A"
         CL_DB_SIZE="N/A"
         
-        # Look for CSV files in results directory
-        if ls results/*.csv 1> /dev/null 2>&1; then
-          # Get the most recent CSV file
-          CSV_FILE=$(ls -t results/*.csv | head -n 1)
-          if [ -f "$CSV_FILE" ]; then
-            echo "Extracting database sizes from $CSV_FILE"
-            # Read the last line of the CSV (excluding header)
-            CSV_LINE=$(tail -n 1 "$CSV_FILE")
-            if [ -n "$CSV_LINE" ] && [ "$CSV_LINE" != "EL_DBSize;CL_DBSize;SyncDurationSeconds;StartTimestamp;EndTimestamp" ]; then
-              EL_DB_SIZE=$(echo "$CSV_LINE" | cut -d';' -f1)
-              CL_DB_SIZE=$(echo "$CSV_LINE" | cut -d';' -f2)
-              echo "Found database sizes - EL: $EL_DB_SIZE, CL: $CL_DB_SIZE"
-            fi
-          fi
-        fi
-        
         # Create summary
         summary="Sync test completed in ${duration}s with result: $test_result"
-        echo "summary=$summary" >> $GITHUB_OUTPUT
+        echo "test_summary=$summary" >> $GITHUB_OUTPUT
         
         # Exit with failure if test failed  
         if [ "$test_result" = "failure" ]; then
@@ -336,8 +296,7 @@ runs:
         # Save test metadata
         cat > sync-test-results/metadata.json << EOF
         {
-          "enclave_name": "$enclave_name",
-          "config_file": "${{ steps.config.outputs.config_file }}",
+          "enclave_name": "${enclave_name}",
           "network": "${{ inputs.network }}",
           "el_client": "${{ inputs.el_client }}",
           "cl_client": "${{ inputs.cl_client }}",
@@ -356,48 +315,38 @@ runs:
         }
         EOF
 
-    - name: Collect Kurtosis enclave dump
+    - name: Organize collected logs
       shell: bash
       if: always()
       run: |
-        # Create directory for enclave dump
+        # Create directory for organized logs
         mkdir -p enclave-dump
         
-        # Get the enclave name from the sync test output
-        enclave_name="${{ steps.sync-test.outputs.enclave_name }}"
-        
-        if [ -n "$enclave_name" ]; then
-          echo "Collecting enclave dump for: $enclave_name"
+        # Move logs collected by peerdas-sync-test.sh
+        if [ -d logs ]; then
+          echo "Found logs directory from peerdas-sync-test.sh"
+          # List what we have
+          echo "Contents of logs directory:"
+          ls -la logs/ || true
           
-          # Perform kurtosis enclave dump
-          kurtosis enclave dump "$enclave_name" enclave-dump 2>/dev/null || echo "Warning: Failed to dump enclave logs"
-          
-          # Also collect individual service logs
-          echo "Collecting individual service logs..."
-          services=$(kurtosis enclave inspect "$enclave_name" 2>/dev/null | grep -E "cl-|el-|assertoor" | awk '{print $1}' || true)
-          
-          if [ -n "$services" ]; then
-            mkdir -p enclave-dump/service-logs
-            for service in $services; do
-              echo "Getting logs for $service..."
-              kurtosis service logs "$enclave_name" "$service" > "enclave-dump/service-logs/${service}.log" 2>&1 || true
-            done
-          fi
-          
-          # Copy the config file used
-          if [ -f "${{ steps.config.outputs.config_file }}" ]; then
-            cp "${{ steps.config.outputs.config_file }}" enclave-dump/config.yaml
-          fi
-          
-          # Copy sync test results
-          if [ -d sync-test-results ]; then
-            cp -r sync-test-results enclave-dump/
-          fi
-          
-          echo "Enclave dump collection completed"
+          # Copy all enclave logs
+          echo "Copying logs to enclave-dump..."
+          cp -r logs/* enclave-dump/ 2>/dev/null || true
         else
-          echo "No enclave name found, skipping dump"
+          echo "No logs directory found"
         fi
+        
+        # Copy sync test results
+        if [ -d sync-test-results ]; then
+          echo "Copying sync test results..."
+          cp -r sync-test-results enclave-dump/
+        fi
+        
+        # Show final structure
+        echo "Final enclave-dump structure:"
+        find enclave-dump -type d | head -20
+        
+        echo "Log organization completed"
 
     - name: Cleanup Kurtosis
       shell: bash
@@ -622,15 +571,16 @@ runs:
         echo "html_path=reports/index.html" >> $GITHUB_OUTPUT
         echo "Generated HTML report at reports/index.html"
 
-    - name: Upload test artifacts
+    - name: Upload enclave dump as artifact
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: sync-test-${{ inputs.network }}-${{ inputs.el_client }}-${{ inputs.cl_client }}-${{ github.run_number }}
-        path: |
-          enclave-dump/
-          reports/
+        name: enclave-dump-${{ inputs.cl_client }}-${{ inputs.el_client }}-${{ github.run_id }}
+        path: enclave-dump/
         retention-days: 30
+        if-no-files-found: warn
+
+    # Note: Additional artifact uploads (like HTML reports) are handled by the calling workflow to avoid conflicts
 
     - name: Save results to data branch
       if: inputs.save_to_data_branch == 'true'

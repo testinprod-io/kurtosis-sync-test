@@ -26,6 +26,7 @@ TEMPLATE_FILE="${__dir}/devnet-templates/devnet-template.yaml"   # Generic Kurto
 TEMP_CONFIG="/tmp/${DEVNET}-config-$$.yaml"                     # Temporary config file with PID suffix
 LOGS_DIR="${__dir}/logs"                                         # Directory to save failure logs
 GENESIS_SYNC=false                                               # Use genesis sync instead of checkpoint sync
+ALWAYS_COLLECT_LOGS=false                                        # Always collect logs even on success
 
 # List of supported Consensus Layer (CL) clients to test
 CL_CLIENTS="lighthouse teku prysm nimbus lodestar grandine"
@@ -38,12 +39,12 @@ EL_CLIENTS="geth nethermind reth besu erigon"
 # Returns the appropriate ethpandaops Docker image for the given CL client
 get_default_image() {
     case "$1" in
-        "lighthouse") echo "docker.ethquokkaops.io/dh/ethpandaops/lighthouse:fusaka-devnet-2" ;;              # Lighthouse fusaka-devnet-2
-        "teku") echo "docker.ethquokkaops.io/dh/ethpandaops/teku:fusaka-devnet-2" ;;                    # Teku fusaka-devnet-2
-        "prysm") echo "docker.ethquokkaops.io/dh/ethpandaops/prysm-beacon-chain:fusaka-devnet-2" ;;        # Prysm fusaka-devnet-2
-        "nimbus") echo "docker.ethquokkaops.io/dh/ethpandaops/nimbus-eth2:fusaka-devnet-2" ;;      # Nimbus fusaka-devnet-2
-        "lodestar") echo "docker.ethquokkaops.io/dh/ethpandaops/lodestar:fusaka-devnet-2" ;;                   # Lodestar fusaka-devnet-2
-        "grandine") echo "docker.ethquokkaops.io/dh/ethpandaops/grandine:fusaka-devnet-2" ;;      # Grandine fusaka-devnet-2
+        "lighthouse") echo "ethpandaops/lighthouse:fusaka-devnet-2" ;;              # Lighthouse fusaka-devnet-2
+        "teku") echo "ethpandaops/teku:fusaka-devnet-2" ;;                    # Teku fusaka-devnet-2
+        "prysm") echo "ethpandaops/prysm-beacon-chain:fusaka-devnet-2" ;;        # Prysm fusaka-devnet-2
+        "nimbus") echo "ethpandaops/nimbus-eth2:fusaka-devnet-2" ;;      # Nimbus fusaka-devnet-2
+        "lodestar") echo "ethpandaops/lodestar:fusaka-devnet-2" ;;                   # Lodestar fusaka-devnet-2
+        "grandine") echo "ethpandaops/grandine:fusaka-devnet-2" ;;      # Grandine fusaka-devnet-2
         *) echo "" ;;                                                          # Return empty for unknown clients
     esac
 }
@@ -53,12 +54,12 @@ get_default_image() {
 # Returns the appropriate ethpandaops Docker image for the given EL client
 get_default_el_image() {
     case "$1" in
-        "geth") echo "docker.ethquokkaops.io/dh/ethpandaops/geth:fusaka-devnet-2" ;;                    # Geth fusaka-devnet-2
-        "nethermind") echo "docker.ethquokkaops.io/dh/ethpandaops/nethermind:fusaka-devnet-2" ;;               # Nethermind fusaka-devnet-2
-        "reth") echo "docker.ethquokkaops.io/dh/ethpandaops/reth:fusaka-devnet-2" ;;                     # Reth fusaka-devnet-2
-        "besu") echo "docker.ethquokkaops.io/dh/ethpandaops/besu:fusaka-devnet-2" ;;            # Besu fusaka-devnet-2
-        "erigon") echo "docker.ethquokkaops.io/dh/ethpandaops/erigon:fusaka-devnet-2" ;;        # Erigon fusaka-devnet-2
-        *) echo "docker.ethquokkaops.io/dh/ethpandaops/geth:fusaka-devnet-2" ;;                         # Default to geth if unknown
+        "geth") echo "ethpandaops/geth:fusaka-devnet-2" ;;                    # Geth fusaka-devnet-2
+        "nethermind") echo "ethpandaops/nethermind:fusaka-devnet-2" ;;               # Nethermind fusaka-devnet-2
+        "reth") echo "ethpandaops/reth:fusaka-devnet-2" ;;                     # Reth fusaka-devnet-2
+        "besu") echo "ethpandaops/besu:fusaka-devnet-2" ;;            # Besu fusaka-devnet-2
+        "erigon") echo "ethpandaops/erigon:fusaka-devnet-2" ;;        # Erigon fusaka-devnet-2
+        *) echo "ethpandaops/geth:fusaka-devnet-2" ;;                         # Default to geth if unknown
     esac
 }
 
@@ -86,6 +87,7 @@ show_help() {
     echo "  -d <devnet>    Specify devnet to use (default: fusaka-devnet-2)"
     echo "  -t <timeout>   Set timeout in seconds (default: 1800)"
     echo "  --genesis-sync Use genesis sync instead of checkpoint sync (default: checkpoint sync)"
+    echo "  --always-collect-logs Always collect enclave logs (even on success)"
     echo "  -h             Show this help message"
     echo ""
     echo "Examples:"
@@ -111,10 +113,15 @@ show_help() {
 # -t: Timeout in seconds
 # -h: Show help
 # --genesis-sync: Use genesis sync instead of checkpoint sync
+# --always-collect-logs: Always collect logs even on success
 # First, handle long options
 for arg in "$@"; do
     if [[ "$arg" == "--genesis-sync" ]]; then
         GENESIS_SYNC=true
+        # Remove the processed long option from arguments
+        set -- "${@/$arg/}"
+    elif [[ "$arg" == "--always-collect-logs" ]]; then
+        ALWAYS_COLLECT_LOGS=true
         # Remove the processed long option from arguments
         set -- "${@/$arg/}"
     fi
@@ -220,27 +227,13 @@ generate_config() {
     local el_type="$3"    # Execution layer client type  
     local el_image="$4"   # Docker image for EL client
     
-    # Get external IP address for NAT configuration
-    # This is needed for nodes to communicate across NAT boundaries
-    local nat_exit_ip=$(curl -s https://icanhazip.com || echo "")
-    if [ -z "$nat_exit_ip" ]; then
-        echo -e "${YELLOW}Warning: Could not fetch external IP, using empty value${NC}"
-        nat_exit_ip=""
-    else
-        # Check if the IP is IPv6 (contains colons)
-        if [[ "$nat_exit_ip" == *":"* ]]; then
-            echo -e "${RED}Error: sorry bbusa, pls use a real ip standard like ipv4 and not ipv6${NC}"
-            exit 1
-        fi
-        echo "Using NAT exit IP: $nat_exit_ip"
-    fi
+    # NAT configuration removed - no longer needed
     
     # Export variables for template substitution
     export CL_CLIENT_TYPE="$cl_type"
     export CL_CLIENT_IMAGE="$cl_image"
     export EL_CLIENT_TYPE="$el_type"
     export EL_CLIENT_IMAGE="$el_image"
-    export NAT_EXIT_IP="$nat_exit_ip"
     export DEVNET="$DEVNET"
     # Set checkpoint sync based on GENESIS_SYNC flag
     if [ "$GENESIS_SYNC" = true ]; then
@@ -250,7 +243,7 @@ generate_config() {
     fi
     
     # Substitute template variables and create temporary config file
-    envsubst '$CL_CLIENT_TYPE $CL_CLIENT_IMAGE $EL_CLIENT_TYPE $EL_CLIENT_IMAGE $NAT_EXIT_IP $CHECKPOINT_SYNC $DEVNET' < "$TEMPLATE_FILE" > "$TEMP_CONFIG"
+    envsubst '$CL_CLIENT_TYPE $CL_CLIENT_IMAGE $EL_CLIENT_TYPE $EL_CLIENT_IMAGE $CHECKPOINT_SYNC $DEVNET' < "$TEMPLATE_FILE" > "$TEMP_CONFIG"
 }
 
 # Helper function to extract runtime from task data and format it
@@ -297,15 +290,15 @@ add_test_result() {
     TEST_LOG_PATHS+=("$log_path")
 }
 
-# Save logs and configuration when a test fails
-# Collects all relevant logs for debugging failed tests
+# Save logs and configuration
+# Collects all relevant logs for debugging
 # Parameters:
 #   $1: Client name
 #   $2: Kurtosis enclave name
 #   $3: Path to config file used
 # Returns: Prints the absolute path to the log directory
 save_failure_logs() {
-    local client="$1"       # Client that failed
+    local client="$1"       # Client being tested
     local enclave="$2"      # Kurtosis enclave containing the test
     local config_file="$3"  # Configuration file used for this test
     
@@ -313,39 +306,54 @@ save_failure_logs() {
     local enclave_log_dir="${LOGS_DIR}/${enclave}"
     mkdir -p "$enclave_log_dir"
     
-    echo -e "${YELLOW}Saving logs and config for failed test...${NC}"
+    echo -e "${YELLOW}Saving logs and config...${NC}" >&2
     
     # Save the Kurtosis config file used for this test
     if [ -f "$config_file" ]; then
         cp "$config_file" "${enclave_log_dir}/config.yaml"
-        echo "Config saved to: ${enclave_log_dir}/config.yaml"
+        echo "Config saved to: ${enclave_log_dir}/config.yaml" >&2
         
         # Also print the config to console for immediate visibility
-        echo -e "\n${YELLOW}=== Configuration used ===${NC}"
-        cat "$config_file"
-        echo -e "${YELLOW}=== End of configuration ===${NC}\n"
+        echo -e "\n${YELLOW}=== Configuration used ===${NC}" >&2
+        cat "$config_file" >&2
+        echo -e "${YELLOW}=== End of configuration ===${NC}\n" >&2
     fi
-    
+
     # Save kurtosis startup logs if they exist
     if [ -f "/tmp/kurtosis-${client}.log" ]; then
         cp "/tmp/kurtosis-${client}.log" "${enclave_log_dir}/kurtosis-startup.log"
-        echo "Kurtosis startup log saved to: ${enclave_log_dir}/kurtosis-startup.log"
+        echo "Kurtosis startup log saved to: ${enclave_log_dir}/kurtosis-startup.log" >&2
     fi
     
-    # Dump entire enclave state and logs
-    echo "Collecting enclave logs..."
-    kurtosis enclave dump "$enclave" "${enclave_log_dir}" 2>/dev/null || echo "Failed to dump enclave logs"
+    # Dump entire enclave state and logs (includes all service logs)
+    echo "Collecting enclave logs..." >&2
     
-    # Extract logs for individual services (CL, EL, and Assertoor)
-    echo "Collecting service logs..."
-    # Find all relevant services by filtering for cl-, el-, and assertoor prefixes
-    local services=$(kurtosis enclave inspect "$enclave" 2>/dev/null | grep -E "cl-|el-|assertoor" | awk '{print $1}' || true)
-    for service in $services; do
-        echo "Getting logs for $service..."
-        kurtosis service logs "$enclave" "$service" > "${enclave_log_dir}/${service}.log" 2>&1 || true
-    done
+    # Check if enclave exists before trying to dump
+    if kurtosis enclave inspect "$enclave" &>/dev/null; then
+        # Try to dump the enclave, capturing any errors
+        # Kurtosis requires the dump directory to not exist, so we create a subdirectory
+        local dump_dir="${enclave_log_dir}/enclave-dump"
+        local dump_command="kurtosis enclave dump $enclave ${dump_dir}"
+        echo "Running: $dump_command" >&2
+        
+        local dump_output
+        dump_output=$(kurtosis enclave dump $enclave ${dump_dir} 2>&1)
+        local dump_exit_code=$?
+        
+        if [ $dump_exit_code -eq 0 ]; then
+            echo "Enclave dump completed successfully" >&2
+        else
+            echo "Warning: Enclave dump had issues (exit code: $dump_exit_code)" >&2
+            echo "Command was: $dump_command" >&2
+            echo "Dump output: $dump_output" >&2
+            # Even if dump fails, we may have partial logs which is better than nothing
+        fi
+    else
+        echo "Warning: Enclave '$enclave' not found or already removed" >&2
+        echo "This can happen if the test cleanup was very fast" >&2
+    fi
     
-    echo -e "${YELLOW}All logs saved to: ${enclave_log_dir}${NC}"
+    echo -e "${YELLOW}All logs saved to: ${enclave_log_dir}${NC}" >&2
     
     # Return the absolute path to the log directory
     echo "$(cd "$enclave_log_dir" && pwd)"
@@ -519,7 +527,14 @@ test_client() {
                 # Extract runtime from task data
                 local total_time=$(extract_task_runtime "$test_data" "run_task_matrix")
                 
-                add_test_result "$client_pair" "Success" "$total_time" "" ""
+                # Always collect logs if flag is set
+                if [ "$ALWAYS_COLLECT_LOGS" = true ]; then
+                    local log_output=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG")
+                    local log_path=$(echo "$log_output" | tail -1)
+                    add_test_result "$client_pair" "Success" "$total_time" "" "$log_path"
+                else
+                    add_test_result "$client_pair" "Success" "$total_time" "" ""
+                fi
                 test_complete=true
                 break
                 ;;
@@ -623,8 +638,8 @@ generate_report() {
         # Print formatted row for this client
         printf "%-20s | %-8s | %-10s | %s\n" "$client" "$status" "$time" "$notes"
         
-        # If test failed and we have a log path, show it
-        if [[ "$status" != "Success" && -n "$log_path" ]]; then
+        # If we have a log path, show it
+        if [[ -n "$log_path" ]]; then
             printf "%-20s   %-8s   %-10s   %s\n" "" "" "" "Logs: $log_path"
         fi
         
@@ -673,6 +688,7 @@ main() {
     
     echo "Testing clients: ${clients_to_test[*]}"
     echo "Timeout per client: ${WAIT_TIME} seconds"
+    echo "Always collect logs: ${ALWAYS_COLLECT_LOGS}"
     
     # Determine EL client to use (defaults to geth if not specified)
     local el_type="${SPECIFIC_EL:-geth}"
