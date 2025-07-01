@@ -298,7 +298,7 @@ add_test_result() {
 #   $3: Path to config file used
 # Returns: Prints the absolute path to the log directory
 save_failure_logs() {
-    local client="$1"       # Client that failed
+    local client="$1"       # Client being tested
     local enclave="$2"      # Kurtosis enclave containing the test
     local config_file="$3"  # Configuration file used for this test
     
@@ -306,30 +306,54 @@ save_failure_logs() {
     local enclave_log_dir="${LOGS_DIR}/${enclave}"
     mkdir -p "$enclave_log_dir"
     
-    echo -e "${YELLOW}Saving logs and config...${NC}"
+    echo -e "${YELLOW}Saving logs and config...${NC}" >&2
     
     # Save the Kurtosis config file used for this test
     if [ -f "$config_file" ]; then
         cp "$config_file" "${enclave_log_dir}/config.yaml"
-        echo "Config saved to: ${enclave_log_dir}/config.yaml"
+        echo "Config saved to: ${enclave_log_dir}/config.yaml" >&2
         
         # Also print the config to console for immediate visibility
-        echo -e "\n${YELLOW}=== Configuration used ===${NC}"
-        cat "$config_file"
-        echo -e "${YELLOW}=== End of configuration ===${NC}\n"
+        echo -e "\n${YELLOW}=== Configuration used ===${NC}" >&2
+        cat "$config_file" >&2
+        echo -e "${YELLOW}=== End of configuration ===${NC}\n" >&2
     fi
-    
+
     # Save kurtosis startup logs if they exist
     if [ -f "/tmp/kurtosis-${client}.log" ]; then
         cp "/tmp/kurtosis-${client}.log" "${enclave_log_dir}/kurtosis-startup.log"
-        echo "Kurtosis startup log saved to: ${enclave_log_dir}/kurtosis-startup.log"
+        echo "Kurtosis startup log saved to: ${enclave_log_dir}/kurtosis-startup.log" >&2
     fi
     
     # Dump entire enclave state and logs (includes all service logs)
-    echo "Collecting enclave logs..."
-    kurtosis enclave dump "$enclave" "${enclave_log_dir}" 2>/dev/null || echo "Failed to dump enclave logs"
+    echo "Collecting enclave logs..." >&2
     
-    echo -e "${YELLOW}All logs saved to: ${enclave_log_dir}${NC}"
+    # Check if enclave exists before trying to dump
+    if kurtosis enclave inspect "$enclave" &>/dev/null; then
+        # Try to dump the enclave, capturing any errors
+        # Kurtosis requires the dump directory to not exist, so we create a subdirectory
+        local dump_dir="${enclave_log_dir}/enclave-dump"
+        local dump_command="kurtosis enclave dump $enclave ${dump_dir}"
+        echo "Running: $dump_command" >&2
+        
+        local dump_output
+        dump_output=$(kurtosis enclave dump $enclave ${dump_dir} 2>&1)
+        local dump_exit_code=$?
+        
+        if [ $dump_exit_code -eq 0 ]; then
+            echo "Enclave dump completed successfully" >&2
+        else
+            echo "Warning: Enclave dump had issues (exit code: $dump_exit_code)" >&2
+            echo "Command was: $dump_command" >&2
+            echo "Dump output: $dump_output" >&2
+            # Even if dump fails, we may have partial logs which is better than nothing
+        fi
+    else
+        echo "Warning: Enclave '$enclave' not found or already removed" >&2
+        echo "This can happen if the test cleanup was very fast" >&2
+    fi
+    
+    echo -e "${YELLOW}All logs saved to: ${enclave_log_dir}${NC}" >&2
     
     # Return the absolute path to the log directory
     echo "$(cd "$enclave_log_dir" && pwd)"
@@ -505,7 +529,6 @@ test_client() {
                 
                 # Always collect logs if flag is set
                 if [ "$ALWAYS_COLLECT_LOGS" = true ]; then
-                    echo "Collecting logs for successful test (--always-collect-logs flag is set)"
                     local log_output=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG")
                     local log_path=$(echo "$log_output" | tail -1)
                     add_test_result "$client_pair" "Success" "$total_time" "" "$log_path"
