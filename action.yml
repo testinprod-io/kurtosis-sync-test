@@ -324,14 +324,27 @@ runs:
         
         # Move logs collected by peerdas-sync-test.sh
         if [ -d logs ]; then
-          echo "Moving logs collected by peerdas-sync-test.sh..."
+          echo "Found logs directory from peerdas-sync-test.sh"
+          # List what we have
+          echo "Contents of logs directory:"
+          ls -la logs/ || true
+          
+          # Copy all enclave logs
+          echo "Copying logs to enclave-dump..."
           cp -r logs/* enclave-dump/ 2>/dev/null || true
+        else
+          echo "No logs directory found"
         fi
         
         # Copy sync test results
         if [ -d sync-test-results ]; then
+          echo "Copying sync test results..."
           cp -r sync-test-results enclave-dump/
         fi
+        
+        # Show final structure
+        echo "Final enclave-dump structure:"
+        find enclave-dump -type d | head -20
         
         echo "Log organization completed"
 
