@@ -231,6 +231,15 @@ jobs:
     if: always() && needs.setup-matrix.outputs.test_count > 1
     
     steps:
+      - name: Install jq
+        run: |
+          if ! command -v jq &> /dev/null; then
+            echo "Installing jq..."
+            sudo apt-get update && sudo apt-get install -y jq
+          else
+            echo "jq is already installed"
+          fi
+      
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -239,6 +248,8 @@ jobs:
       
       - name: Create aggregated summary
         run: |
+          set -e  # Exit on error
+          
           echo "## Sync Test Matrix Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Network:** ${{ needs.setup-matrix.outputs.network }}" >> $GITHUB_STEP_SUMMARY
@@ -253,15 +264,38 @@ jobs:
           for result_dir in all-results/sync-test-*/; do
             if [ -d "$result_dir" ]; then
               dirname=$(basename "$result_dir")
+              echo "Processing $dirname..."
+              echo "Full path: $result_dir"
+              
+              # List contents to debug structure
+              echo "Contents of $result_dir:"
+              ls -la "$result_dir" || true
+              
               # Extract client names from directory name
-              network_el_cl=$(echo "$dirname" | sed 's/sync-test-//')
-              el_client=$(echo "$network_el_cl" | cut -d'-' -f2)
-              cl_client=$(echo "$network_el_cl" | cut -d'-' -f3)
+              # Format: sync-test-<network>-<el_client>-<cl_client>
+              # Since network names can contain hyphens, we extract from the end
+              # We know the last two components are el_client and cl_client
+              parts=(${dirname//-/ })  # Split by hyphen into array
+              parts_count=${#parts[@]}
+              
+              # Last two parts are cl_client and el_client (in reverse order)
+              if [ $parts_count -ge 2 ]; then
+                cl_client="${parts[$((parts_count-1))]}"
+                el_client="${parts[$((parts_count-2))]}"
+              else
+                # Fallback if parsing fails
+                el_client="unknown"
+                cl_client="unknown"
+              fi
+              
+              echo "Extracted: EL=$el_client, CL=$cl_client"
               
               # Get status from metadata
-              if [ -f "$result_dir/sync-test-results/metadata.json" ]; then
-                status=$(cat "$result_dir/sync-test-results/metadata.json" | jq -r '.result')
-                duration=$(cat "$result_dir/sync-test-results/metadata.json" | jq -r '.duration')
+              metadata_path="$result_dir/sync-test-results/metadata.json"
+              if [ -f "$metadata_path" ]; then
+                echo "Found metadata at: $metadata_path"
+                status=$(jq -r '.result // "unknown"' "$metadata_path")
+                duration=$(jq -r '.duration // "N/A"' "$metadata_path")
                 
                 # Add emoji based on status
                 case "$status" in
@@ -270,8 +304,14 @@ jobs:
                   *) status_emoji="❓ $status" ;;
                 esac
                 
-                echo "| $el_client | $cl_client | $status_emoji | ${duration}s |" >> $GITHUB_STEP_SUMMARY
+                # Format duration if it's a number
+                if [[ "$duration" =~ ^[0-9]+$ ]]; then
+                  duration="${duration}s"
+                fi
+                
+                echo "| $el_client | $cl_client | $status_emoji | $duration |" >> $GITHUB_STEP_SUMMARY
               else
+                echo "Warning: metadata.json not found at $metadata_path"
                 echo "| $el_client | $cl_client | ❓ unknown | N/A |" >> $GITHUB_STEP_SUMMARY
               fi
             fi
