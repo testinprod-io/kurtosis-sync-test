@@ -531,13 +531,9 @@ test_client() {
                 if [ "$ALWAYS_COLLECT_LOGS" = true ]; then
                     local log_output=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG")
                     local log_path=$(echo "$log_output" | tail -1)
-                    echo "DEBUG: Adding test result for $client_pair with log path: $log_path" >&2
                     add_test_result "$client_pair" "Success" "$total_time" "" "$log_path"
-                    echo "DEBUG: Test results array size: ${#TEST_CLIENTS[@]}" >&2
                 else
-                    echo "DEBUG: Adding test result for $client_pair without logs" >&2
                     add_test_result "$client_pair" "Success" "$total_time" "" ""
-                    echo "DEBUG: Test results array size: ${#TEST_CLIENTS[@]}" >&2
                 fi
                 test_complete=true
                 break
@@ -623,8 +619,6 @@ generate_report() {
     # Track success statistics
     local success_count=0
     local total_count=0
-    
-    echo "DEBUG: Number of test results to report: ${#TEST_CLIENTS[@]}" >&2
     
     # Iterate through all test results
     for i in "${!TEST_CLIENTS[@]}"; do
