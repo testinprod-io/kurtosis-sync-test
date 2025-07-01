@@ -39,12 +39,12 @@ EL_CLIENTS="geth nethermind reth besu erigon"
 # Returns the appropriate ethpandaops Docker image for the given CL client
 get_default_image() {
     case "$1" in
-        "lighthouse") echo "docker.ethquokkaops.io/dh/ethpandaops/lighthouse:fusaka-devnet-2" ;;              # Lighthouse fusaka-devnet-2
-        "teku") echo "docker.ethquokkaops.io/dh/ethpandaops/teku:fusaka-devnet-2" ;;                    # Teku fusaka-devnet-2
-        "prysm") echo "docker.ethquokkaops.io/dh/ethpandaops/prysm-beacon-chain:fusaka-devnet-2" ;;        # Prysm fusaka-devnet-2
-        "nimbus") echo "docker.ethquokkaops.io/dh/ethpandaops/nimbus-eth2:fusaka-devnet-2" ;;      # Nimbus fusaka-devnet-2
-        "lodestar") echo "docker.ethquokkaops.io/dh/ethpandaops/lodestar:fusaka-devnet-2" ;;                   # Lodestar fusaka-devnet-2
-        "grandine") echo "docker.ethquokkaops.io/dh/ethpandaops/grandine:fusaka-devnet-2" ;;      # Grandine fusaka-devnet-2
+        "lighthouse") echo "ethpandaops/lighthouse:fusaka-devnet-2" ;;              # Lighthouse fusaka-devnet-2
+        "teku") echo "ethpandaops/teku:fusaka-devnet-2" ;;                    # Teku fusaka-devnet-2
+        "prysm") echo "ethpandaops/prysm-beacon-chain:fusaka-devnet-2" ;;        # Prysm fusaka-devnet-2
+        "nimbus") echo "ethpandaops/nimbus-eth2:fusaka-devnet-2" ;;      # Nimbus fusaka-devnet-2
+        "lodestar") echo "ethpandaops/lodestar:fusaka-devnet-2" ;;                   # Lodestar fusaka-devnet-2
+        "grandine") echo "ethpandaops/grandine:fusaka-devnet-2" ;;      # Grandine fusaka-devnet-2
         *) echo "" ;;                                                          # Return empty for unknown clients
     esac
 }
@@ -54,12 +54,12 @@ get_default_image() {
 # Returns the appropriate ethpandaops Docker image for the given EL client
 get_default_el_image() {
     case "$1" in
-        "geth") echo "docker.ethquokkaops.io/dh/ethpandaops/geth:fusaka-devnet-2" ;;                    # Geth fusaka-devnet-2
-        "nethermind") echo "docker.ethquokkaops.io/dh/ethpandaops/nethermind:fusaka-devnet-2" ;;               # Nethermind fusaka-devnet-2
-        "reth") echo "docker.ethquokkaops.io/dh/ethpandaops/reth:fusaka-devnet-2" ;;                     # Reth fusaka-devnet-2
-        "besu") echo "docker.ethquokkaops.io/dh/ethpandaops/besu:fusaka-devnet-2" ;;            # Besu fusaka-devnet-2
-        "erigon") echo "docker.ethquokkaops.io/dh/ethpandaops/erigon:fusaka-devnet-2" ;;        # Erigon fusaka-devnet-2
-        *) echo "docker.ethquokkaops.io/dh/ethpandaops/geth:fusaka-devnet-2" ;;                         # Default to geth if unknown
+        "geth") echo "ethpandaops/geth:fusaka-devnet-2" ;;                    # Geth fusaka-devnet-2
+        "nethermind") echo "ethpandaops/nethermind:fusaka-devnet-2" ;;               # Nethermind fusaka-devnet-2
+        "reth") echo "ethpandaops/reth:fusaka-devnet-2" ;;                     # Reth fusaka-devnet-2
+        "besu") echo "ethpandaops/besu:fusaka-devnet-2" ;;            # Besu fusaka-devnet-2
+        "erigon") echo "ethpandaops/erigon:fusaka-devnet-2" ;;        # Erigon fusaka-devnet-2
+        *) echo "ethpandaops/geth:fusaka-devnet-2" ;;                         # Default to geth if unknown
     esac
 }
 
