@@ -531,9 +531,13 @@ test_client() {
                 if [ "$ALWAYS_COLLECT_LOGS" = true ]; then
                     local log_output=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG")
                     local log_path=$(echo "$log_output" | tail -1)
+                    echo "DEBUG: Adding test result for $client_pair with log path: $log_path" >&2
                     add_test_result "$client_pair" "Success" "$total_time" "" "$log_path"
+                    echo "DEBUG: Test results array size: ${#TEST_CLIENTS[@]}" >&2
                 else
+                    echo "DEBUG: Adding test result for $client_pair without logs" >&2
                     add_test_result "$client_pair" "Success" "$total_time" "" ""
+                    echo "DEBUG: Test results array size: ${#TEST_CLIENTS[@]}" >&2
                 fi
                 test_complete=true
                 break
@@ -620,6 +624,8 @@ generate_report() {
     local success_count=0
     local total_count=0
     
+    echo "DEBUG: Number of test results to report: ${#TEST_CLIENTS[@]}" >&2
+    
     # Iterate through all test results
     for i in "${!TEST_CLIENTS[@]}"; do
         local client="${TEST_CLIENTS[$i]}"
@@ -650,10 +656,16 @@ generate_report() {
     echo -e "\nSummary: ${success_count}/${total_count} clients successfully synced"
 
     # Exit with appropriate code
-    # 0 = all tests passed, 1 = some tests failed
-    if [ $success_count -eq $total_count ]; then
+    # Check if we have any results at all
+    if [ $total_count -eq 0 ]; then
+        echo -e "\n${RED}ERROR: No test results were recorded!${NC}"
+        echo "This usually means the test results were not properly captured."
+        exit 1
+    elif [ $success_count -eq $total_count ]; then
+        # All tests passed
         exit 0
     else
+        # Some tests failed
         exit 1
     fi
 }
