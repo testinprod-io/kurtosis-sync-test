@@ -220,27 +220,13 @@ generate_config() {
     local el_type="$3"    # Execution layer client type  
     local el_image="$4"   # Docker image for EL client
     
-    # Get external IP address for NAT configuration
-    # This is needed for nodes to communicate across NAT boundaries
-    local nat_exit_ip=$(curl -s https://icanhazip.com || echo "")
-    if [ -z "$nat_exit_ip" ]; then
-        echo -e "${YELLOW}Warning: Could not fetch external IP, using empty value${NC}"
-        nat_exit_ip=""
-    else
-        # Check if the IP is IPv6 (contains colons)
-        if [[ "$nat_exit_ip" == *":"* ]]; then
-            echo -e "${RED}Error: sorry bbusa, pls use a real ip standard like ipv4 and not ipv6${NC}"
-            exit 1
-        fi
-        echo "Using NAT exit IP: $nat_exit_ip"
-    fi
+    # NAT configuration removed - no longer needed
     
     # Export variables for template substitution
     export CL_CLIENT_TYPE="$cl_type"
     export CL_CLIENT_IMAGE="$cl_image"
     export EL_CLIENT_TYPE="$el_type"
     export EL_CLIENT_IMAGE="$el_image"
-    export NAT_EXIT_IP="$nat_exit_ip"
     export DEVNET="$DEVNET"
     # Set checkpoint sync based on GENESIS_SYNC flag
     if [ "$GENESIS_SYNC" = true ]; then
@@ -250,7 +236,7 @@ generate_config() {
     fi
     
     # Substitute template variables and create temporary config file
-    envsubst '$CL_CLIENT_TYPE $CL_CLIENT_IMAGE $EL_CLIENT_TYPE $EL_CLIENT_IMAGE $NAT_EXIT_IP $CHECKPOINT_SYNC $DEVNET' < "$TEMPLATE_FILE" > "$TEMP_CONFIG"
+    envsubst '$CL_CLIENT_TYPE $CL_CLIENT_IMAGE $EL_CLIENT_TYPE $EL_CLIENT_IMAGE $CHECKPOINT_SYNC $DEVNET' < "$TEMPLATE_FILE" > "$TEMP_CONFIG"
 }
 
 # Helper function to extract runtime from task data and format it
