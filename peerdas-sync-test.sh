@@ -631,7 +631,7 @@ generate_report() {
         # Apply color coding based on test status and count successes
         case "$status" in
             "Success")
-                ((success_count++))  # Increment success counter
+                success_count=$((success_count + 1))  # Increment success counter
                 ;;
         esac
         
@@ -643,17 +643,23 @@ generate_report() {
             printf "%-20s   %-8s   %-10s   %s\n" "" "" "" "Logs: $log_path"
         fi
         
-        ((total_count++))
+        total_count=$((total_count + 1))
     done
     
     # Print summary statistics
     echo -e "\nSummary: ${success_count}/${total_count} clients successfully synced"
 
     # Exit with appropriate code
-    # 0 = all tests passed, 1 = some tests failed
-    if [ $success_count -eq $total_count ]; then
+    # Check if we have any results at all
+    if [ $total_count -eq 0 ]; then
+        echo -e "\n${RED}ERROR: No test results were recorded!${NC}"
+        echo "This usually means the test results were not properly captured."
+        exit 1
+    elif [ $success_count -eq $total_count ]; then
+        # All tests passed
         exit 0
     else
+        # Some tests failed
         exit 1
     fi
 }

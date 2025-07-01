@@ -263,7 +263,17 @@ runs:
         
         # Run the sync test and capture output
         start_time=$(date +%s)
-        if eval "$cmd" 2>&1 | tee sync-test-results/test.log; then
+        
+        # Run the command and capture both output and exit code
+        # Using a different approach to avoid subshell issues with tee
+        eval "$cmd" > sync-test-results/test.log 2>&1
+        exit_code=$?
+        
+        # Display the log output
+        cat sync-test-results/test.log
+        
+        # Check exit code
+        if [ $exit_code -eq 0 ]; then
           test_result="success"
           echo "test_result=success" >> $GITHUB_OUTPUT
         else
@@ -571,16 +581,7 @@ runs:
         echo "html_path=reports/index.html" >> $GITHUB_OUTPUT
         echo "Generated HTML report at reports/index.html"
 
-    - name: Upload enclave dump as artifact
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: enclave-dump-${{ inputs.cl_client }}-${{ inputs.el_client }}-${{ github.run_id }}
-        path: enclave-dump/
-        retention-days: 30
-        if-no-files-found: warn
-
-    # Note: Additional artifact uploads (like HTML reports) are handled by the calling workflow to avoid conflicts
+    # Note: Artifact uploads (enclave dumps, HTML reports) are handled by the calling workflow to avoid conflicts
 
     - name: Save results to data branch
       if: inputs.save_to_data_branch == 'true'
