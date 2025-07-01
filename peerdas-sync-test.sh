@@ -26,6 +26,7 @@ TEMPLATE_FILE="${__dir}/devnet-templates/devnet-template.yaml"   # Generic Kurto
 TEMP_CONFIG="/tmp/${DEVNET}-config-$$.yaml"                     # Temporary config file with PID suffix
 LOGS_DIR="${__dir}/logs"                                         # Directory to save failure logs
 GENESIS_SYNC=false                                               # Use genesis sync instead of checkpoint sync
+ALWAYS_COLLECT_LOGS=false                                        # Always collect logs even on success
 
 # List of supported Consensus Layer (CL) clients to test
 CL_CLIENTS="lighthouse teku prysm nimbus lodestar grandine"
@@ -86,6 +87,7 @@ show_help() {
     echo "  -d <devnet>    Specify devnet to use (default: fusaka-devnet-2)"
     echo "  -t <timeout>   Set timeout in seconds (default: 1800)"
     echo "  --genesis-sync Use genesis sync instead of checkpoint sync (default: checkpoint sync)"
+    echo "  --always-collect-logs Always collect enclave logs (even on success)"
     echo "  -h             Show this help message"
     echo ""
     echo "Examples:"
@@ -111,10 +113,15 @@ show_help() {
 # -t: Timeout in seconds
 # -h: Show help
 # --genesis-sync: Use genesis sync instead of checkpoint sync
+# --always-collect-logs: Always collect logs even on success
 # First, handle long options
 for arg in "$@"; do
     if [[ "$arg" == "--genesis-sync" ]]; then
         GENESIS_SYNC=true
+        # Remove the processed long option from arguments
+        set -- "${@/$arg/}"
+    elif [[ "$arg" == "--always-collect-logs" ]]; then
+        ALWAYS_COLLECT_LOGS=true
         # Remove the processed long option from arguments
         set -- "${@/$arg/}"
     fi
@@ -283,8 +290,8 @@ add_test_result() {
     TEST_LOG_PATHS+=("$log_path")
 }
 
-# Save logs and configuration when a test fails
-# Collects all relevant logs for debugging failed tests
+# Save logs and configuration
+# Collects all relevant logs for debugging
 # Parameters:
 #   $1: Client name
 #   $2: Kurtosis enclave name
@@ -299,7 +306,7 @@ save_failure_logs() {
     local enclave_log_dir="${LOGS_DIR}/${enclave}"
     mkdir -p "$enclave_log_dir"
     
-    echo -e "${YELLOW}Saving logs and config for failed test...${NC}"
+    echo -e "${YELLOW}Saving logs and config...${NC}"
     
     # Save the Kurtosis config file used for this test
     if [ -f "$config_file" ]; then
@@ -496,7 +503,13 @@ test_client() {
                 # Extract runtime from task data
                 local total_time=$(extract_task_runtime "$test_data" "run_task_matrix")
                 
-                add_test_result "$client_pair" "Success" "$total_time" "" ""
+                # Always collect logs if flag is set
+                if [ "$ALWAYS_COLLECT_LOGS" = true ]; then
+                    local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
+                    add_test_result "$client_pair" "Success" "$total_time" "" "$log_path"
+                else
+                    add_test_result "$client_pair" "Success" "$total_time" "" ""
+                fi
                 test_complete=true
                 break
                 ;;

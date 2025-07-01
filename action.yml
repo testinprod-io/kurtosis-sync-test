@@ -197,6 +197,7 @@ runs:
         cmd="$cmd -e ${{ inputs.el_client }}"
         cmd="$cmd -c ${{ inputs.cl_client }}"
         cmd="$cmd -t ${{ inputs.wait_time }}"
+        cmd="$cmd --always-collect-logs"  # Always collect logs for GitHub Actions
         
         # Add custom images if provided
         if [ -n "${{ steps.parse-images.outputs.cl_image }}" ]; then
@@ -216,28 +217,6 @@ runs:
         else
           test_result="failure"
           echo "test_result=failure" >> $GITHUB_OUTPUT
-          
-          # On failure, immediately save any available logs
-          echo "Test failed, collecting available logs..."
-          
-          # Extract enclave name from the log if available
-          enclave_name=$(grep -oP 'Starting Kurtosis enclave: \K[^ ]+' sync-test-results/test.log | head -1 || echo "")
-          
-          if [ -n "$enclave_name" ]; then
-            # Create failure logs directory
-            failure_log_dir="logs/${enclave_name}"
-            mkdir -p "$failure_log_dir"
-            
-            # Copy any available logs
-            if [ -f "/tmp/kurtosis-${{ inputs.cl_client }}.log" ]; then
-              cp "/tmp/kurtosis-${{ inputs.cl_client }}.log" "$failure_log_dir/kurtosis-startup.log" || true
-            fi
-            
-            # Try to dump enclave if it's still running
-            kurtosis enclave dump "$enclave_name" "$failure_log_dir" 2>/dev/null || true
-            
-            echo "Failure logs saved to: $failure_log_dir"
-          fi
         fi
         end_time=$(date +%s)
         
@@ -284,64 +263,25 @@ runs:
         }
         EOF
 
-    - name: Collect Kurtosis enclave dump
+    - name: Organize collected logs
       shell: bash
       if: always()
       run: |
-        # Create directory for enclave dump
+        # Create directory for organized logs
         mkdir -p enclave-dump
         
-        # Get the enclave name from the sync test output
-        enclave_name="${{ steps.sync-test.outputs.enclave_name }}"
-        
-        if [ -n "$enclave_name" ]; then
-          echo "Collecting enclave dump for: $enclave_name"
-          
-          # Create subdirectory for this specific enclave
-          enclave_log_dir="enclave-dump/${enclave_name}"
-          mkdir -p "$enclave_log_dir"
-          
-          echo "Saving logs and config for test..."
-          
-          # Save the Kurtosis config file if it exists
-          if [ -f "/tmp/${{ inputs.network }}-config-$$.yaml" ]; then
-            cp "/tmp/${{ inputs.network }}-config-$$.yaml" "${enclave_log_dir}/config.yaml"
-            echo "Config saved to: ${enclave_log_dir}/config.yaml"
-            
-            # Also print the config to console for immediate visibility
-            echo ""
-            echo "=== Configuration used ==="
-            cat "/tmp/${{ inputs.network }}-config-$$.yaml" || true
-            echo "=== End of configuration ==="
-            echo ""
-          fi
-          
-          # Save kurtosis startup logs if they exist
-          if [ -f "/tmp/kurtosis-${{ inputs.cl_client }}.log" ]; then
-            cp "/tmp/kurtosis-${{ inputs.cl_client }}.log" "${enclave_log_dir}/kurtosis-startup.log"
-            echo "Kurtosis startup log saved to: ${enclave_log_dir}/kurtosis-startup.log"
-          fi
-          
-          # Dump entire enclave state and logs (includes all service logs)
-          echo "Collecting enclave logs..."
-          kurtosis enclave dump "$enclave_name" "${enclave_log_dir}" 2>/dev/null || echo "Failed to dump enclave logs"
-          
-          echo "All logs saved to: ${enclave_log_dir}"
-          
-          # Copy sync test results
-          if [ -d sync-test-results ]; then
-            cp -r sync-test-results enclave-dump/
-          fi
-          
-          # Copy logs directory if it exists (from peerdas-sync-test.sh)
-          if [ -d logs ]; then
-            cp -r logs enclave-dump/
-          fi
-          
-          echo "Enclave dump collection completed"
-        else
-          echo "No enclave name found, skipping dump"
+        # Move logs collected by peerdas-sync-test.sh
+        if [ -d logs ]; then
+          echo "Moving logs collected by peerdas-sync-test.sh..."
+          cp -r logs/* enclave-dump/ 2>/dev/null || true
         fi
+        
+        # Copy sync test results
+        if [ -d sync-test-results ]; then
+          cp -r sync-test-results enclave-dump/
+        fi
+        
+        echo "Log organization completed"
 
     - name: Cleanup Kurtosis
       shell: bash
@@ -571,9 +511,7 @@ runs:
       if: always()
       with:
         name: enclave-dump-${{ inputs.cl_client }}-${{ inputs.el_client }}-${{ github.run_id }}
-        path: |
-          enclave-dump/
-          logs/
+        path: enclave-dump/
         retention-days: 30
         if-no-files-found: warn
 
