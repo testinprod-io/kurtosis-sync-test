@@ -318,18 +318,9 @@ save_failure_logs() {
         echo "Kurtosis startup log saved to: ${enclave_log_dir}/kurtosis-startup.log"
     fi
     
-    # Dump entire enclave state and logs
+    # Dump entire enclave state and logs (includes all service logs)
     echo "Collecting enclave logs..."
     kurtosis enclave dump "$enclave" "${enclave_log_dir}" 2>/dev/null || echo "Failed to dump enclave logs"
-    
-    # Extract logs for individual services (CL, EL, and Assertoor)
-    echo "Collecting service logs..."
-    # Find all relevant services by filtering for cl-, el-, and assertoor prefixes
-    local services=$(kurtosis enclave inspect "$enclave" 2>/dev/null | grep -E "cl-|el-|assertoor" | awk '{print $1}' || true)
-    for service in $services; do
-        echo "Getting logs for $service..."
-        kurtosis service logs "$enclave" "$service" > "${enclave_log_dir}/${service}.log" 2>&1 || true
-    done
     
     echo -e "${YELLOW}All logs saved to: ${enclave_log_dir}${NC}"
     
