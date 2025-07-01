@@ -631,7 +631,7 @@ generate_report() {
         # Apply color coding based on test status and count successes
         case "$status" in
             "Success")
-                ((success_count++))  # Increment success counter
+                success_count=$((success_count + 1))  # Increment success counter
                 ;;
         esac
         
@@ -643,7 +643,7 @@ generate_report() {
             printf "%-20s   %-8s   %-10s   %s\n" "" "" "" "Logs: $log_path"
         fi
         
-        ((total_count++))
+        total_count=$((total_count + 1))
     done
     
     # Print summary statistics
