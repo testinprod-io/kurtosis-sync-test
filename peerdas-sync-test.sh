@@ -505,7 +505,9 @@ test_client() {
                 
                 # Always collect logs if flag is set
                 if [ "$ALWAYS_COLLECT_LOGS" = true ]; then
-                    local log_path=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG" | tail -1)
+                    echo "Collecting logs for successful test (--always-collect-logs flag is set)"
+                    local log_output=$(save_failure_logs "$client" "$enclave" "$TEMP_CONFIG")
+                    local log_path=$(echo "$log_output" | tail -1)
                     add_test_result "$client_pair" "Success" "$total_time" "" "$log_path"
                 else
                     add_test_result "$client_pair" "Success" "$total_time" "" ""
@@ -613,8 +615,8 @@ generate_report() {
         # Print formatted row for this client
         printf "%-20s | %-8s | %-10s | %s\n" "$client" "$status" "$time" "$notes"
         
-        # If test failed and we have a log path, show it
-        if [[ "$status" != "Success" && -n "$log_path" ]]; then
+        # If we have a log path, show it
+        if [[ -n "$log_path" ]]; then
             printf "%-20s   %-8s   %-10s   %s\n" "" "" "" "Logs: $log_path"
         fi
         
@@ -663,6 +665,7 @@ main() {
     
     echo "Testing clients: ${clients_to_test[*]}"
     echo "Timeout per client: ${WAIT_TIME} seconds"
+    echo "Always collect logs: ${ALWAYS_COLLECT_LOGS}"
     
     # Determine EL client to use (defaults to geth if not specified)
     local el_type="${SPECIFIC_EL:-geth}"

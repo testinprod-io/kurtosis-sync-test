@@ -176,6 +176,7 @@ runs:
         docker pull docker.ethquokkaops.io/dh/alpine:$ALPINE_VERSION &
         docker pull docker.ethquokkaops.io/dh/traefik:$TRAEFIK_VERSION &
         docker pull docker.ethquokkaops.io/dh/badouralix/curl-jq &
+        docker pull docker.ethquokkaops.io/dh/busybox:latest &
 
         # Wait for all pulls to complete
         wait
@@ -190,6 +191,7 @@ runs:
         docker tag docker.ethquokkaops.io/dh/alpine:$ALPINE_VERSION alpine:$ALPINE_VERSION
         docker tag docker.ethquokkaops.io/dh/traefik:$TRAEFIK_VERSION traefik:$TRAEFIK_VERSION
         docker tag docker.ethquokkaops.io/dh/badouralix/curl-jq badouralix/curl-jq
+        docker tag docker.ethquokkaops.io/dh/busybox:latest busybox:latest
 
     - name: Parse client images
       shell: bash
