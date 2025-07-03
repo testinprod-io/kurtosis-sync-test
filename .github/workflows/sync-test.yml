@@ -8,7 +8,7 @@ on:
         required: false
         type: string
         default: '["self-hosted-ghr-size-l-x64"]'
-      
+
       network:
         description: 'Network to test (select from list or enter custom)'
         required: true
@@ -20,35 +20,30 @@ on:
           - hoodi
           - custom
         default: 'fusaka-devnet-2'
-      
-      custom_network:
-        description: 'Custom network name (only used if network is "custom")'
-        required: false
-        type: string
-      
+
       el_clients:
         description: 'Comma-separated list of EL clients (e.g., geth,nethermind,reth)'
         required: true
         type: string
-        default: 'geth'
-      
+        default: 'geth,nethermind,reth,besu,erigon'
+
       cl_clients:
         description: 'Comma-separated list of CL clients (e.g., lighthouse,teku,prysm)'
         required: true
         type: string
-        default: 'lighthouse'
-      
+        default: 'lighthouse,teku,prysm,nimbus,lodestar,grandine'
+
       wait_time:
         description: 'Wait time in seconds before restarting clients'
         required: false
         type: number
         default: 1800
-      
+
       enclave_name:
         description: 'Custom enclave name (optional)'
         required: false
         type: string
-      
+
       matrix_mode:
         description: 'Run as matrix (all combinations) or single test'
         required: true
@@ -56,14 +51,19 @@ on:
         options:
           - single
           - matrix
-        default: 'single'
-      
+        default: 'matrix'
+
+      custom_network:
+        description: 'Custom network name (only used if network is "custom")'
+        required: false
+        type: string
+
       client_images:
         description: 'Custom client images as JSON (e.g., {"geth":"docker.ethquokkaops.io/dh/ethpandaops/geth:fusaka-devnet-2","lighthouse":"docker.ethquokkaops.io/dh/ethpandaops/lighthouse:fusaka-devnet-2"})'
         required: false
         type: string
         default: '{}'
-  
+
   schedule:
     # Run daily at 2:00 AM UTC
     - cron: '0 2 * * *'
@@ -98,7 +98,7 @@ jobs:
           else
             echo "network=${{ github.event.inputs.network }}" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Parse clients and create matrix
         id: set-matrix
         shell: bash
@@ -111,32 +111,32 @@ jobs:
             echo "test_count=4" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
+
           # Parse comma-separated clients
           EL_CLIENTS="${{ github.event.inputs.el_clients }}"
           CL_CLIENTS="${{ github.event.inputs.cl_clients }}"
           MATRIX_MODE="${{ github.event.inputs.matrix_mode }}"
-          
+
           # Convert to arrays
           IFS=',' read -ra EL_ARRAY <<< "$EL_CLIENTS"
           IFS=',' read -ra CL_ARRAY <<< "$CL_CLIENTS"
-          
+
           # Trim whitespace from each element using a counter
           EL_COUNT=${#EL_ARRAY[@]}
           for ((i=0; i<EL_COUNT; i++)); do
             EL_ARRAY[$i]=$(echo "${EL_ARRAY[$i]}" | xargs)
           done
-          
+
           CL_COUNT=${#CL_ARRAY[@]}
           for ((i=0; i<CL_COUNT; i++)); do
             CL_ARRAY[$i]=$(echo "${CL_ARRAY[$i]}" | xargs)
           done
-          
+
           # Create matrix based on mode
           MATRIX_JSON='{"include":['
           FIRST=true
           TEST_COUNT=0
-          
+
           if [ "$MATRIX_MODE" == "matrix" ]; then
             # Create all combinations
             for el in "${EL_ARRAY[@]}"; do
@@ -160,18 +160,18 @@ jobs:
             MATRIX_JSON+="{\"el_client\":\"${EL_ARRAY[0]}\",\"cl_client\":\"${CL_ARRAY[0]}\"}"
             TEST_COUNT=1
           fi
-          
+
           MATRIX_JSON+=']}'
-          
+
           echo "Generated matrix: $MATRIX_JSON"
           echo "Test count: $TEST_COUNT"
-          
+
           # Ensure GITHUB_OUTPUT is set
           if [ -z "$GITHUB_OUTPUT" ]; then
             echo "Error: GITHUB_OUTPUT is not set"
             exit 1
           fi
-          
+
           echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"
           echo "test_count=$TEST_COUNT" >> "$GITHUB_OUTPUT"
 
@@ -182,11 +182,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+
       - name: Run sync test
         uses: ./
         id: sync-test
@@ -199,7 +199,7 @@ jobs:
           generate_html_report: 'false'
           save_to_data_branch: 'true'
           client_images: ${{ github.event.inputs.client_images || '{}' }}
-      
+
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always()
@@ -210,7 +210,7 @@ jobs:
             reports/
             enclave-dump/
           retention-days: 7
-      
+
       - name: Display test summary
         run: |
           echo "## Sync Test Results" >> $GITHUB_STEP_SUMMARY
@@ -229,7 +229,7 @@ jobs:
     needs: [setup-matrix, sync-test]
     runs-on: ${{ fromJson(github.event.inputs.worker || '["self-hosted-ghr-size-l-x64"]') }}
     if: always() && needs.setup-matrix.outputs.test_count > 1
-    
+
     steps:
       - name: Install jq
         run: |
@@ -239,45 +239,45 @@ jobs:
           else
             echo "jq is already installed"
           fi
-      
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: sync-test-*
           path: ./all-results
-      
+
       - name: Create aggregated summary
         run: |
           set -e  # Exit on error
-          
+
           echo "## Sync Test Matrix Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Network:** ${{ needs.setup-matrix.outputs.network }}" >> $GITHUB_STEP_SUMMARY
           echo "**Total Tests:** ${{ needs.setup-matrix.outputs.test_count }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Create results table
           echo "| EL Client | CL Client | Status | Duration |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|-----------|--------|----------|" >> $GITHUB_STEP_SUMMARY
-          
+
           # Process each test result
           for result_dir in all-results/sync-test-*/; do
             if [ -d "$result_dir" ]; then
               dirname=$(basename "$result_dir")
               echo "Processing $dirname..."
               echo "Full path: $result_dir"
-              
+
               # List contents to debug structure
               echo "Contents of $result_dir:"
               ls -la "$result_dir" || true
-              
+
               # Extract client names from directory name
               # Format: sync-test-<network>-<el_client>-<cl_client>
               # Since network names can contain hyphens, we extract from the end
               # We know the last two components are el_client and cl_client
               parts=(${dirname//-/ })  # Split by hyphen into array
               parts_count=${#parts[@]}
-              
+
               # Last two parts are cl_client and el_client (in reverse order)
               if [ $parts_count -ge 2 ]; then
                 cl_client="${parts[$((parts_count-1))]}"
@@ -287,28 +287,28 @@ jobs:
                 el_client="unknown"
                 cl_client="unknown"
               fi
-              
+
               echo "Extracted: EL=$el_client, CL=$cl_client"
-              
+
               # Get status from metadata
               metadata_path="$result_dir/sync-test-results/metadata.json"
               if [ -f "$metadata_path" ]; then
                 echo "Found metadata at: $metadata_path"
                 status=$(jq -r '.result // "unknown"' "$metadata_path")
                 duration=$(jq -r '.duration // "N/A"' "$metadata_path")
-                
+
                 # Add emoji based on status
                 case "$status" in
                   "success") status_emoji="✅ $status" ;;
                   "failure") status_emoji="❌ $status" ;;
                   *) status_emoji="❓ $status" ;;
                 esac
-                
+
                 # Format duration if it's a number
                 if [[ "$duration" =~ ^[0-9]+$ ]]; then
                   duration="${duration}s"
                 fi
-                
+
                 echo "| $el_client | $cl_client | $status_emoji | $duration |" >> $GITHUB_STEP_SUMMARY
               else
                 echo "Warning: metadata.json not found at $metadata_path"
@@ -316,6 +316,6 @@ jobs:
               fi
             fi
           done
-          
+
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "View detailed results at: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> $GITHUB_STEP_SUMMARY
