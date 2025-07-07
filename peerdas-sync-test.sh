@@ -17,6 +17,7 @@ NC='\033[0m'           # No Color - resets to default
 
 # Default configuration values
 DEVNET="${DEVNET:-fusaka-devnet-2}"                              # Default devnet name (can be overridden)
+DEVNET_REPO="ethpandaops"                                         # Default devnet repo name (can be overridden)
 WAIT_TIME=1800                                                    # Default timeout in seconds (30 minutes)
 SPECIFIC_CLIENT=""                                                # Specific CL client to test (empty = test all)
 CUSTOM_CL_IMAGE=""                                                # Custom Docker image for CL client
@@ -85,6 +86,7 @@ show_help() {
     echo "  -e <client>    Use specific EL client (geth, nethermind, reth, besu, erigon) (default: geth)"
     echo "  -E <image>     Use custom Docker image for the EL client"
     echo "  -d <devnet>    Specify devnet to use (default: fusaka-devnet-2)"
+    echo "  -D <devnet_repo>    Specify devnet repo to use (default: ethpandaops)"
     echo "  -t <timeout>   Set timeout in seconds (default: 1800)"
     echo "  --genesis-sync Use genesis sync instead of checkpoint sync (default: checkpoint sync)"
     echo "  --always-collect-logs Always collect enclave logs (even on success)"
@@ -100,6 +102,7 @@ show_help() {
     echo "  $0 -c lighthouse -e nethermind         # Test Lighthouse with Nethermind"
     echo "  $0 -c teku -e besu -E hyperledger/besu:develop  # Test Teku with custom Besu image"
     echo "  $0 -c lighthouse --genesis-sync      # Test Lighthouse with genesis sync"
+    echo "  $0 -c lighthouse -d your_devnet -D your_devnet_repo # Test Lighthouse with network config from your custom devnet repo"
     exit 0
 }
 
@@ -127,7 +130,7 @@ for arg in "$@"; do
     fi
 done
 
-while getopts ":c:i:e:E:d:t:h" opt; do
+while getopts ":c:i:e:E:d:D:t:h" opt; do
     case ${opt} in
         c )  # CL client selection
             SPECIFIC_CLIENT=$OPTARG
@@ -155,6 +158,9 @@ while getopts ":c:i:e:E:d:t:h" opt; do
             ;;
         d )  # Devnet selection
             DEVNET=$OPTARG
+            ;;
+        D ) # Devnet selection
+            DEVNET_REPO=$OPTARG
             ;;
         t )  # Timeout value in seconds
             WAIT_TIME=$OPTARG
@@ -235,6 +241,7 @@ generate_config() {
     export EL_CLIENT_TYPE="$el_type"
     export EL_CLIENT_IMAGE="$el_image"
     export DEVNET="$DEVNET"
+    export DEVNET_REPO="$DEVNET_REPO"
     # Set checkpoint sync based on GENESIS_SYNC flag
     if [ "$GENESIS_SYNC" = true ]; then
         export CHECKPOINT_SYNC="false"
@@ -243,7 +250,7 @@ generate_config() {
     fi
     
     # Substitute template variables and create temporary config file
-    envsubst '$CL_CLIENT_TYPE $CL_CLIENT_IMAGE $EL_CLIENT_TYPE $EL_CLIENT_IMAGE $CHECKPOINT_SYNC $DEVNET' < "$TEMPLATE_FILE" > "$TEMP_CONFIG"
+    envsubst '$CL_CLIENT_TYPE $CL_CLIENT_IMAGE $EL_CLIENT_TYPE $EL_CLIENT_IMAGE $CHECKPOINT_SYNC $DEVNET $DEVNET_REPO' < "$TEMPLATE_FILE" > "$TEMP_CONFIG"
 }
 
 # Helper function to extract runtime from task data and format it
