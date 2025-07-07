@@ -89,6 +89,7 @@ jobs:
   # First job: Parse inputs and create matrix
   setup-matrix:
     runs-on: ${{ fromJson(github.event.inputs.worker || '["self-hosted-ghr-size-l-x64"]') }}
+    timeout-minutes: ${{ fromJson(github.event.inputs.timeout || '120') }}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       network: ${{ steps.set-network.outputs.network }}
@@ -260,6 +261,7 @@ jobs:
   aggregate-results:
     needs: [setup-matrix, sync-test]
     runs-on: ${{ fromJson(github.event.inputs.worker || '["self-hosted-ghr-size-l-x64"]') }}
+    timeout-minutes: ${{ fromJson(github.event.inputs.timeout || '120') }}
     if: always() && needs.setup-matrix.outputs.test_count > 1
 
     steps:
