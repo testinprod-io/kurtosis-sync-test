@@ -5,6 +5,7 @@ participants:
     cl_image: ${CL_CLIENT_IMAGE}
 network_params:
   network: ${DEVNET}
+  devnet_repo: ${DEVNET_REPO}
 persistent: true
 additional_services:
   - assertoor
