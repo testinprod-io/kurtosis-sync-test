@@ -64,6 +64,12 @@ on:
         type: string
         default: '{}'
 
+      timeout:
+        description: 'Timeout for the sync test job in minutes'
+        required: false
+        type: number
+        default: 120
+
   schedule:
     # Run daily at 2:00 AM UTC
     - cron: '0 2 * * *'
@@ -104,11 +110,36 @@ jobs:
         shell: bash
         run: |
           set +H  # Disable history expansion to avoid issues with !
-          # For scheduled runs, use default matrix
+          # For scheduled runs, use full matrix of all clients
           if [ "${{ github.event_name }}" == "schedule" ]; then
-            MATRIX_JSON='{"include":[{"el_client":"geth","cl_client":"lighthouse"},{"el_client":"nethermind","cl_client":"teku"},{"el_client":"reth","cl_client":"lighthouse"},{"el_client":"besu","cl_client":"teku"}]}'
+            # Define all supported clients for scheduled runs
+            EL_CLIENTS="geth,nethermind,reth,besu,erigon"
+            CL_CLIENTS="lighthouse,teku,prysm,nimbus,lodestar,grandine"
+            
+            # Convert to arrays
+            IFS=',' read -ra EL_ARRAY <<< "$EL_CLIENTS"
+            IFS=',' read -ra CL_ARRAY <<< "$CL_CLIENTS"
+            
+            # Create full matrix for scheduled runs
+            MATRIX_JSON='{"include":['
+            FIRST=true
+            TEST_COUNT=0
+            
+            for el in "${EL_ARRAY[@]}"; do
+              for cl in "${CL_ARRAY[@]}"; do
+                if [ "$FIRST" = true ]; then
+                  FIRST=false
+                else
+                  MATRIX_JSON+=','
+                fi
+                MATRIX_JSON+="{\"el_client\":\"$el\",\"cl_client\":\"$cl\"}"
+                TEST_COUNT=$((TEST_COUNT + 1))
+              done
+            done
+            
+            MATRIX_JSON+=']}'
             echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-            echo "test_count=4" >> $GITHUB_OUTPUT
+            echo "test_count=$TEST_COUNT" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -179,6 +210,7 @@ jobs:
   sync-test:
     needs: setup-matrix
     runs-on: ${{ fromJson(github.event.inputs.worker || '["self-hosted-ghr-size-l-x64"]') }}
+    timeout-minutes: ${{ fromJson(github.event.inputs.timeout || '120') }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
