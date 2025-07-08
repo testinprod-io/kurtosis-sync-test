@@ -220,7 +220,7 @@ jobs:
           network: ${{ needs.setup-matrix.outputs.network }}
           el_client: ${{ matrix.el_client }}
           cl_client: ${{ matrix.cl_client }}
-          timeout: ${{ (github.event.inputs.timeout || 120) * 60 }}
+          timeout: ${{ github.event.inputs.timeout && github.event.inputs.timeout * 60 || 7200 }}
           enclave_name: ${{ github.event.inputs.enclave_name || format('sync-{0}-{1}-{2}-{3}', needs.setup-matrix.outputs.network, matrix.el_client, matrix.cl_client, github.run_number) }}
           generate_html_report: 'false'
           save_to_data_branch: 'true'
