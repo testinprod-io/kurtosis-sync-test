@@ -213,6 +213,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Calculate timeout in seconds
+        id: calc-timeout
+        run: |
+          timeout_minutes=${{ github.event.inputs.timeout || 120 }}
+          timeout_seconds=$((timeout_minutes * 60))
+          echo "timeout_seconds=$timeout_seconds" >> $GITHUB_OUTPUT
+
       - name: Run sync test
         uses: ./
         id: sync-test
@@ -220,7 +227,7 @@ jobs:
           network: ${{ needs.setup-matrix.outputs.network }}
           el_client: ${{ matrix.el_client }}
           cl_client: ${{ matrix.cl_client }}
-          timeout: ${{ github.event.inputs.timeout && github.event.inputs.timeout * 60 || 7200 }}
+          timeout: ${{ steps.calc-timeout.outputs.timeout_seconds }}
           enclave_name: ${{ github.event.inputs.enclave_name || format('sync-{0}-{1}-{2}-{3}', needs.setup-matrix.outputs.network, matrix.el_client, matrix.cl_client, github.run_number) }}
           generate_html_report: 'false'
           save_to_data_branch: 'true'
