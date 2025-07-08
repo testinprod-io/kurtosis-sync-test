@@ -33,11 +33,11 @@ on:
         type: string
         default: 'lighthouse,teku,prysm,nimbus,lodestar,grandine'
 
-      wait_time:
-        description: 'Wait time in seconds before restarting clients'
+      timeout:
+        description: 'Timeout for the sync test job in minutes'
         required: false
         type: number
-        default: 1800
+        default: 120
 
       enclave_name:
         description: 'Custom enclave name (optional)'
@@ -64,11 +64,6 @@ on:
         type: string
         default: '{}'
 
-      timeout:
-        description: 'Timeout for the sync test job in minutes'
-        required: false
-        type: number
-        default: 120
 
   schedule:
     # Run daily at 2:00 AM UTC
@@ -89,7 +84,6 @@ jobs:
   # First job: Parse inputs and create matrix
   setup-matrix:
     runs-on: ${{ fromJson(github.event.inputs.worker || '["self-hosted-ghr-size-l-x64"]') }}
-    timeout-minutes: ${{ fromJson(github.event.inputs.timeout || '120') }}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       network: ${{ steps.set-network.outputs.network }}
@@ -211,7 +205,6 @@ jobs:
   sync-test:
     needs: setup-matrix
     runs-on: ${{ fromJson(github.event.inputs.worker || '["self-hosted-ghr-size-l-x64"]') }}
-    timeout-minutes: ${{ fromJson(github.event.inputs.timeout || '120') }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
@@ -227,7 +220,7 @@ jobs:
           network: ${{ needs.setup-matrix.outputs.network }}
           el_client: ${{ matrix.el_client }}
           cl_client: ${{ matrix.cl_client }}
-          wait_time: ${{ github.event.inputs.wait_time || '1800' }}
+          timeout: ${{ (github.event.inputs.timeout || 120) * 60 }}
           enclave_name: ${{ github.event.inputs.enclave_name || format('sync-{0}-{1}-{2}-{3}', needs.setup-matrix.outputs.network, matrix.el_client, matrix.cl_client, github.run_number) }}
           generate_html_report: 'false'
           save_to_data_branch: 'true'
@@ -261,7 +254,6 @@ jobs:
   aggregate-results:
     needs: [setup-matrix, sync-test]
     runs-on: ${{ fromJson(github.event.inputs.worker || '["self-hosted-ghr-size-l-x64"]') }}
-    timeout-minutes: ${{ fromJson(github.event.inputs.timeout || '120') }}
     if: always() && needs.setup-matrix.outputs.test_count > 1
 
     steps:
