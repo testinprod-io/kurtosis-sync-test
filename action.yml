@@ -29,10 +29,10 @@ inputs:
     required: false
     default: ''
   
-  wait_time:
-    description: 'Wait time in seconds before restarting clients'
+  timeout:
+    description: 'Timeout for the sync test job in seconds'
     required: false
-    default: '1800'
+    default: '7200'
   
   generate_html_report:
     description: 'Whether to generate HTML report for GitHub Pages'
@@ -240,7 +240,7 @@ runs:
           fi
         fi
         
-        echo "  Wait Time: ${{ inputs.wait_time }}s"
+        echo "  Timeout: ${{ inputs.timeout }}s"
         echo
         
         # Build peerdas-sync-test.sh command
@@ -248,7 +248,7 @@ runs:
         cmd="$cmd -d ${{ inputs.network }}"
         cmd="$cmd -e ${{ inputs.el_client }}"
         cmd="$cmd -c ${{ inputs.cl_client }}"
-        cmd="$cmd -t ${{ inputs.wait_time }}"
+        cmd="$cmd -t ${{ inputs.timeout }}"
         cmd="$cmd --always-collect-logs"  # Always collect logs for GitHub Actions
         
         # Add custom images if provided
@@ -311,7 +311,7 @@ runs:
           "el_client": "${{ inputs.el_client }}",
           "cl_client": "${{ inputs.cl_client }}",
           "client_images": ${{ inputs.client_images }},
-          "wait_time": ${{ inputs.wait_time }},
+          "timeout": ${{ inputs.timeout }},
           "start_time": $start_time,
           "end_time": $end_time,
           "duration": $duration,
