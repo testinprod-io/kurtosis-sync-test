@@ -1,122 +1,42 @@
-# Ethereum Client Sync Test Script
+# Ethereum Client Sync Test
 
-This repository contains a test script that automates the testing of Ethereum clients' ability to synchronize with an existing Ethereum network.
+This repository contains automated testing infrastructure for Ethereum clients' synchronization capabilities using [Kurtosis](https://docs.kurtosis.com/). The primary focus is on testing PeerDAS-enabled devnets and various client combinations.
+
+## Overview
+
+The sync test framework:
+- Tests Ethereum execution layer (EL) and consensus layer (CL) client pairs
+- Verifies clients can successfully sync with an existing network
+- Supports custom Docker images for testing development branches
+- Provides detailed test reports and logs
+- Includes reusable GitHub Actions for CI/CD integration
 
 ## Dependencies
 
-Before using the script, ensure you have the following dependencies installed:
+Before using the test scripts, ensure you have the following dependencies installed:
 
 - [Kurtosis](https://docs.kurtosis.com/install)
 - `curl`
 - `jq`
 - `yq`
-
-## Usage
-
-To start the synchronization test, use the following command:
-
-```sh
-make run
-```
-
-To stop and clean up the testnet, use:
-
-```sh
-make clean
-```
-
-Running `make` alone will execute the synchronization test and clean up afterwards.
-
-### Prepare `kurtosis-config.yaml`
-
-Before running the test, ensure that the `kurtosis-config.yaml` file is prepared to include the client pairs that should be tested. 
-All participants with `validator_count: 0` are stopped after initialization and tested for their synchronization capabilities later on.
-
-## Parameters
-
-Instead of using `make run`, you can manually invoke the `synctest.sh` script with optional parameters for dev/debugging purposes:
-
-```sh
-./synctest.sh <enclave-name> <kurtosis-config>
-```
-
-- `<enclave-name>`: Name of the enclave (defaults to `synctest-XXX`, where `XXX` is a random string)
-- `<kurtosis-config>`: Path to the Kurtosis configuration file (defaults to `./kurtosis-config.yaml`)
+- `docker`
 
 ## PeerDAS Sync Test
 
-The `peerdas-sync-test.sh` script is designed to test Consensus Layer (CL) clients' synchronization capabilities on PeerDAS-enabled devnets (default: fusaka-devnet-2).
+The `peerdas-sync-test.sh` script tests Consensus Layer (CL) clients' synchronization capabilities on PeerDAS-enabled devnets.
 
-### Using Different Devnets
-
-The script uses `fusaka-devnet-2` for PeerDAS testing:
+### Quick Start
 
 ```sh
 # Test all CL clients
 ./peerdas-sync-test.sh
 
-# Test with lighthouse
+# Test specific CL client
 ./peerdas-sync-test.sh -c lighthouse
 
 # Using make
-make peerdas-test ARGS="-c teku"
-```
-
-**Note:** The script uses a single generic template file (`devnet-templates/devnet-template.yaml`) that automatically adapts to the specified devnet.
-
-### Usage
-
-#### Using Make commands
-
-```sh
-# Test all CL clients with default settings
 make peerdas-test
-
-# Test a specific CL client
-make peerdas-test ARGS="-c lighthouse"
-
-# Test with a custom Docker image
-make peerdas-test ARGS="-c teku -i consensys/teku:custom-branch"
-
-# Test with a specific EL client
-make peerdas-test ARGS="-c lighthouse -e nethermind"
-
-# Test with specific timeout
-make peerdas-test ARGS="-t 2400"
-
-# Use genesis sync instead of checkpoint sync
-make peerdas-test ARGS="-c lighthouse --genesis-sync"
-
-# Set a custom timeout
-make peerdas-test ARGS="-t 2400"
-
-# Show help
-make peerdas-test ARGS="-h"
-```
-
-#### Direct script usage
-
-```sh
-# Test all CL clients with default settings
-./peerdas-sync-test.sh
-
-# Test a specific CL client
-./peerdas-sync-test.sh -c lighthouse
-
-# Test with a custom Docker image
-./peerdas-sync-test.sh -c teku -i consensys/teku:custom-branch
-
-# Test with a specific EL client (default is geth)
-./peerdas-sync-test.sh -c lighthouse -e nethermind
-
-# Test with specific timeout
-./peerdas-sync-test.sh -t 2400
-
-# Use genesis sync instead of checkpoint sync
-./peerdas-sync-test.sh -c lighthouse --genesis-sync
-
-# Set a custom timeout (in seconds)
-./peerdas-sync-test.sh -t 2400
+make peerdas-test ARGS="-c teku"
 ```
 
 ### Options
@@ -126,9 +46,40 @@ make peerdas-test ARGS="-h"
 - `-e <client>`: Use specific EL client (geth, nethermind, reth, besu, erigon) (default: geth)
 - `-E <image>`: Use custom Docker image for the EL client
 - `-d <devnet>`: Specify devnet to use (default: fusaka-devnet-2)
+- `-D <devnet_repo>`: Specify devnet repo to use (default: ethpandaops)
 - `-t <timeout>`: Set timeout in seconds (default: 1800)
 - `--genesis-sync`: Use genesis sync instead of checkpoint sync (default: checkpoint sync)
+- `--always-collect-logs`: Always collect enclave logs (even on success)
+- `--supernode`: Enable supernode functionality for participants
 - `-h`: Show help message
+
+### Examples
+
+```sh
+# Test with custom Docker image
+./peerdas-sync-test.sh -c teku -i consensys/teku:custom-branch
+
+# Test with specific EL client
+./peerdas-sync-test.sh -c lighthouse -e nethermind
+
+# Test with longer timeout
+./peerdas-sync-test.sh -t 2400
+
+# Test with genesis sync
+./peerdas-sync-test.sh -c lighthouse --genesis-sync
+
+# Test with supernode enabled
+./peerdas-sync-test.sh -c lighthouse --supernode
+
+# Test with custom devnet and repo
+./peerdas-sync-test.sh -c lighthouse -d your_devnet -D your_devnet_repo
+
+# Test with always collecting logs
+./peerdas-sync-test.sh -c teku --always-collect-logs
+
+# Test with custom EL image
+./peerdas-sync-test.sh -c teku -e besu -E hyperledger/besu:develop
+```
 
 ### Supported Clients
 
@@ -147,41 +98,39 @@ make peerdas-test ARGS="-h"
 - Besu
 - Erigon
 
-### Test Output
+## Test Process
 
-The script will generate a summary report showing:
+The test script performs the following steps:
+
+1. **Network Setup**: Spins up a Kurtosis enclave with the specified client configuration
+2. **Client Initialization**: Starts all clients and waits for network initialization
+3. **Client Shutdown**: Stops non-validating clients after initialization
+4. **Network Progress**: Allows the network to progress and produce blocks (default: 30 minutes)
+5. **Sync Test**: Restarts stopped clients to test synchronization
+6. **Verification**: Uses Assertoor to verify successful synchronization
+7. **Reporting**: Generates test reports and saves logs for failed tests
+
+## Configuration
+
+The test framework uses a generic template approach with environment variable substitution:
+
+- **Template**: `devnet-templates/devnet-template.yaml`
+- **Variables**: Automatically populated based on selected devnet and client options
+- **Customization**: The template adapts to different networks and client combinations
+
+## Test Output
+
+The script generates comprehensive test reports including:
 - Test status for each client (Success/Failed/Timeout)
 - Sync time for successful tests
-- Failure reasons for failed tests
-- Log file locations for debugging failed tests
+- Failure reasons and error details
+- Log file locations for debugging
 
-Failed test logs are saved to the `logs/` directory with the enclave name.
-
-## Script Description
-
-The script performs the following steps:
-
-1. Spins up a Kurtosis testnet using the provided Kurtosis configuration.
-2. Immediately after creation, all client pairs without validator keys are shut down.\
-   These clients are initialized but not following the chain.
-3. Waits for a specified time to allow the testnet to proceed and build blocks.\
-   Several transaction and blob spammers are included to add load to the chain.
-4. After 30 minutes or when manually proceeding, the previously shut-down clients are turned on again, starting their synchronization with the chain.
-5. An assertion test is launched that polls the now synchronizing clients for their synchronization status.
-6. When all clients are synchronized, the test succeeds and the script stops execution.
+Failed test logs are saved to the `logs/` directory with the enclave name for debugging.
 
 ## GitHub Action
 
-This repository also provides a reusable GitHub Action for testing Ethereum client synchronization capabilities using Kurtosis.
-
-### Features
-
-- **Automated Testing**: Test Ethereum execution and consensus layer client pairs
-- **Multi-Network Support**: Test on mainnet, sepolia, and hoodi networks
-- **Client Flexibility**: Support for multiple EL (Geth, Nethermind, Reth, Besu, Erigon) and CL (Lighthouse, Teku, Prysm, Nimbus, Lodestar, Grandine) clients
-- **HTML Reports**: Generate beautiful HTML reports for GitHub Pages
-- **Configurable**: Flexible configuration for different test scenarios
-- **Reusable**: Can be called from other repositories
+This repository provides a reusable GitHub Action for automated testing in CI/CD pipelines.
 
 ### Basic Usage
 
@@ -189,7 +138,6 @@ This repository also provides a reusable GitHub Action for testing Ethereum clie
 - name: Run sync test
   uses: ethpandaops/kurtosis-sync-test@main
   with:
-    network: mainnet
     el_client: geth
     cl_client: lighthouse
 ```
@@ -201,12 +149,9 @@ This repository also provides a reusable GitHub Action for testing Ethereum clie
   uses: ethpandaops/kurtosis-sync-test@main
   with:
     enclave_name: my-custom-test
-    config_file: custom-config.yaml
-    network: sepolia
     el_client: nethermind
     cl_client: teku
     wait_time: 3600
-    generate_html_report: true
     kurtosis_version: 0.89.0
 ```
 
@@ -218,9 +163,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        network: [mainnet, sepolia, hoodi]
         el_client: [geth, nethermind, reth]
-        cl_client: [lighthouse, teku, prysm, nimbus, lodestar, grandine]
+        cl_client: [lighthouse, teku, prysm]
     
     steps:
       - uses: actions/checkout@v4
@@ -228,7 +172,6 @@ jobs:
       - name: Run sync test
         uses: ethpandaops/kurtosis-sync-test@main
         with:
-          network: ${{ matrix.network }}
           el_client: ${{ matrix.el_client }}
           cl_client: ${{ matrix.cl_client }}
 ```
@@ -238,12 +181,9 @@ jobs:
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
 | `enclave_name` | Name for the Kurtosis enclave | No | Auto-generated |
-| `config_file` | Path to configuration file | No | `kurtosis-config.yaml` |
-| `network` | Network to test (mainnet/sepolia/hoodi) | No | `mainnet` |
 | `el_client` | Execution layer client | No | `geth` |
 | `cl_client` | Consensus layer client | No | `lighthouse` |
 | `wait_time` | Wait time in seconds before restarting clients | No | `1800` |
-| `generate_html_report` | Generate HTML report for GitHub Pages | No | `true` |
 | `kurtosis_version` | Version of Kurtosis CLI to use | No | `latest` |
 
 ### Action Outputs
@@ -252,70 +192,32 @@ jobs:
 |--------|-------------|
 | `test_result` | Result of the sync test (success/failure) |
 | `test_summary` | Summary of test execution |
-| `html_report_path` | Path to generated HTML report |
 | `enclave_name` | Name of the Kurtosis enclave used |
 
-### GitHub Pages Integration
+## Development
 
-When `generate_html_report` is enabled, the action creates a comprehensive HTML report that can be deployed to GitHub Pages:
+### Project Structure
 
-```yaml
-- name: Setup Pages
-  uses: actions/configure-pages@v5
-
-- name: Upload to Pages
-  uses: actions/upload-pages-artifact@v3
-  with:
-    path: reports/
-
-- name: Deploy to GitHub Pages
-  uses: actions/deploy-pages@v4
+```
+.
+├── peerdas-sync-test.sh      # Main test script
+├── devnet-templates/         # Generic configuration templates
+├── action.yml               # GitHub Action definition
+├── .github/
+│   ├── workflows/          # CI/CD workflows
+│   └── scripts/           # Helper scripts
+└── logs/                 # Test logs (generated)
 ```
 
-### How the Action Works
+### Running Tests Locally
 
-1. **Setup**: Installs Kurtosis CLI and required dependencies
-2. **Validation**: Validates input parameters
-3. **Configuration**: Determines the appropriate configuration file
-4. **Network Start**: Starts Kurtosis enclave with all client pairs
-5. **Client Stop**: Stops non-validating client pairs
-6. **Wait Period**: Allows the network to progress
-7. **Client Restart**: Restarts stopped clients to test sync
-8. **Sync Verification**: Uses Assertoor to verify sync status
-9. **Report Generation**: Creates HTML reports and artifacts
-10. **Cleanup**: Cleans up Kurtosis resources
-
-### Troubleshooting
-
-**Common Issues:**
-
-1. **Kurtosis Installation Fails**: Ensure the runner has sufficient permissions and internet access
-2. **Configuration File Not Found**: Check the path and ensure the file exists in the repository
-3. **Sync Test Timeout**: Increase `wait_time` for slower networks
-4. **Resource Constraints**: Use `max-parallel` in matrix strategies to limit concurrent tests
-
-**Debug Mode:**
-
-```yaml
-- name: Run sync test with debug
-  uses: ethpandaops/kurtosis-sync-test@main
-  env:
-    ACTIONS_STEP_DEBUG: true
-    ACTIONS_RUNNER_DEBUG: true
-  with:
-    network: mainnet
-    el_client: geth
-    cl_client: lighthouse
-```
+1. Clone the repository
+2. Install dependencies
+3. Run tests:
+   ```sh
+   make peerdas-test
+   ```
 
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
----
-
-For more detailed information, refer to the script comments and the [Kurtosis ethereum-package documentation](https://github.com/ethpandaops/ethereum-package).
-
-Feel free to open issues or submit pull requests if you find any bugs or have improvements.
-
-Happy testing!
