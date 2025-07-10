@@ -3,6 +3,7 @@ participants:
     el_image: ${EL_CLIENT_IMAGE}
     cl_type: ${CL_CLIENT_TYPE}
     cl_image: ${CL_CLIENT_IMAGE}
+    supernode: ${SUPERNODE_ENABLED}
 network_params:
   network: ${DEVNET}
   devnet_repo: ${DEVNET_REPO}

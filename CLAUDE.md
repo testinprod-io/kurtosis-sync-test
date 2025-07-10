@@ -26,9 +26,10 @@ This project provides automated synchronization testing for Ethereum clients by:
 6. Collecting and reporting performance metrics
 
 ### Main Scripts
-- `synctest.sh`: Core sync test orchestration
+- `synctest.sh`: Core sync test orchestration (supports `-s` flag for supernode testing)
+- `peerdas-sync-test.sh`: PeerDAS sync test with supernode support (`--supernode` flag)
 - `oneliner.sh`: Continuous testing loop for all client combinations
-- `Makefile`: Simple interface for common operations
+- `Makefile`: Simple interface for common operations (includes `run-supernode` target)
 
 ### Supported Networks
 - Mainnet
@@ -45,3 +46,12 @@ This project provides automated synchronization testing for Ethereum clients by:
 - Ensure proper error handling in all bash scripts
 - Never commit credentials or sensitive information
 - Follow the established directory structure for network configurations
+
+### Supernode Testing
+The project supports supernode functionality for participants through:
+- `synctest.sh -s`: Enable supernode for sync testing
+- `peerdas-sync-test.sh --supernode`: Enable supernode for PeerDAS testing
+- `make run-supernode`: Make target for supernode testing
+- GitHub Actions workflow parameter: `supernode_enabled: true`
+
+Supernode configuration adds the `supernode: true` parameter to participant configurations, enabling enhanced networking capabilities for testing purposes.

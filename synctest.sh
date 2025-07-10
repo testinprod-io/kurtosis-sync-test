@@ -1,4 +1,14 @@
 #!/bin/bash
+#
+# Script: synctest.sh
+# Description: Automated testing framework for validating Ethereum client synchronization capabilities
+# Usage: synctest.sh [-t wait_time] [-s] [enclave_name] [config_file]
+# Options:
+#   -t, --time    Set wait time in seconds (default: 1800)
+#   -s, --supernode    Enable supernode functionality for participants
+#   enclave_name    Name of the Kurtosis enclave (default: random)
+#   config_file     Path to configuration file (default: kurtosis-config.yaml)
+#
 __dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 YELLOW='\033[1;33m'
 GRAY='\033[0;37m'
@@ -9,12 +19,16 @@ NC='\033[0m'
 echo "## Sync Test"
 # Default wait time
 WAIT_TIME=1800
+SUPERNODE_ENABLED=false
 
 # Parse command line arguments
-while getopts ":t:" opt; do
+while getopts ":t:s" opt; do
   case ${opt} in
     t )
       WAIT_TIME=$OPTARG
+      ;;
+    s )
+      SUPERNODE_ENABLED=true
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
@@ -57,7 +71,26 @@ fi
 
 echo "Enclave: $enclave"
 echo "Config:  $config"
+echo "Supernode Enabled: $SUPERNODE_ENABLED"
 echo ""
+
+# Handle supernode configuration
+if [ "$SUPERNODE_ENABLED" = true ]; then
+    echo "Configuring supernode parameters..."
+    
+    # Create temporary config file with supernode settings
+    temp_config=$(mktemp)
+    cp "$config" "$temp_config"
+    
+    # Add supernode parameter to the last participant using yq
+    yq eval '.participants[-1].supernode = true' -i "$temp_config"
+    
+    config="$temp_config"
+    echo "Updated config with supernode settings: $config"
+    
+    # Clean up temp file on exit
+    trap 'rm -f "$temp_config"' EXIT
+fi
 
 # 1: Start kurtosis with all pairs
 if kurtosis enclave inspect "$enclave" 2> /dev/null 1> /dev/null; then

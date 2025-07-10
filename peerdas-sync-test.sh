@@ -28,6 +28,7 @@ TEMP_CONFIG="/tmp/${DEVNET}-config-$$.yaml"                     # Temporary conf
 LOGS_DIR="${__dir}/logs"                                         # Directory to save failure logs
 GENESIS_SYNC=false                                               # Use genesis sync instead of checkpoint sync
 ALWAYS_COLLECT_LOGS=false                                        # Always collect logs even on success
+SUPERNODE_ENABLED=false                                          # Enable supernode functionality
 
 # List of supported Consensus Layer (CL) clients to test
 CL_CLIENTS="lighthouse teku prysm nimbus lodestar grandine"
@@ -90,6 +91,7 @@ show_help() {
     echo "  -t <timeout>   Set timeout in seconds (default: 1800)"
     echo "  --genesis-sync Use genesis sync instead of checkpoint sync (default: checkpoint sync)"
     echo "  --always-collect-logs Always collect enclave logs (even on success)"
+    echo "  --supernode    Enable supernode functionality for participants"
     echo "  -h             Show this help message"
     echo ""
     echo "Examples:"
@@ -125,6 +127,10 @@ for arg in "$@"; do
         set -- "${@/$arg/}"
     elif [[ "$arg" == "--always-collect-logs" ]]; then
         ALWAYS_COLLECT_LOGS=true
+        # Remove the processed long option from arguments
+        set -- "${@/$arg/}"
+    elif [[ "$arg" == "--supernode" ]]; then
+        SUPERNODE_ENABLED=true
         # Remove the processed long option from arguments
         set -- "${@/$arg/}"
     fi
@@ -250,7 +256,7 @@ generate_config() {
     fi
     
     # Substitute template variables and create temporary config file
-    envsubst '$CL_CLIENT_TYPE $CL_CLIENT_IMAGE $EL_CLIENT_TYPE $EL_CLIENT_IMAGE $CHECKPOINT_SYNC $DEVNET $DEVNET_REPO' < "$TEMPLATE_FILE" > "$TEMP_CONFIG"
+    envsubst '$CL_CLIENT_TYPE $CL_CLIENT_IMAGE $EL_CLIENT_TYPE $EL_CLIENT_IMAGE $CHECKPOINT_SYNC $DEVNET $DEVNET_REPO $SUPERNODE_ENABLED' < "$TEMPLATE_FILE" > "$TEMP_CONFIG"
 }
 
 # Helper function to extract runtime from task data and format it
