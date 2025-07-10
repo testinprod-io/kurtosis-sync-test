@@ -64,6 +64,12 @@ on:
         type: string
         default: '{}'
 
+      supernode_enabled:
+        description: 'Enable supernode functionality for participants'
+        required: false
+        type: boolean
+        default: false
+
 
   schedule:
     # Run daily at 2:00 AM UTC
@@ -232,6 +238,7 @@ jobs:
           generate_html_report: 'false'
           save_to_data_branch: 'true'
           client_images: ${{ github.event.inputs.client_images || '{}' }}
+          supernode_enabled: ${{ github.event.inputs.supernode_enabled || 'false' }}
 
       - name: Upload test results
         uses: actions/upload-artifact@v4

@@ -6,6 +6,10 @@ all: run clean
 run:
 	./synctest.sh -t $(WAIT_TIME)
 
+# Run sync test with supernode enabled
+run-supernode:
+	./synctest.sh -t $(WAIT_TIME) -s
+
 clean:
 	kurtosis clean -a
 
@@ -23,6 +27,7 @@ run-custom-wait:
 #   make peerdas-test ARGS="-c lighthouse"              # Test specific client
 #   make peerdas-test ARGS="-c teku --genesis-sync"     # Test with genesis sync
 #   make peerdas-test ARGS="-c lighthouse -e nethermind" # Test with specific EL
+#   make peerdas-test ARGS="-c lighthouse --supernode"  # Test with supernode enabled
 #   make peerdas-test ARGS="-h"                         # Show help
 peerdas-test:
 	./peerdas-sync-test.sh $(ARGS)

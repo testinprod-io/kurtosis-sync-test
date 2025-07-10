@@ -53,6 +53,11 @@ inputs:
     description: 'Custom client images as JSON mapping (e.g., {"geth":"ethereum/client-go:v1.13.0","lighthouse":"sigp/lighthouse:v4.5.0"})'
     required: false
     default: '{}'
+  
+  supernode_enabled:
+    description: 'Enable supernode functionality for participants'
+    required: false
+    default: 'false'
 
 outputs:
   test_result:
@@ -251,6 +256,11 @@ runs:
         cmd="$cmd -t ${{ inputs.timeout }}"
         cmd="$cmd --always-collect-logs"  # Always collect logs for GitHub Actions
         
+        # Add supernode parameter if enabled
+        if [ "${{ inputs.supernode_enabled }}" = "true" ]; then
+          cmd="$cmd --supernode"
+        fi
+        
         # Add custom images if provided
         if [ -n "${{ steps.parse-images.outputs.cl_image }}" ]; then
           cmd="$cmd -i '${{ steps.parse-images.outputs.cl_image }}'"
@@ -312,6 +322,7 @@ runs:
           "cl_client": "${{ inputs.cl_client }}",
           "client_images": ${{ inputs.client_images }},
           "timeout": ${{ inputs.timeout }},
+          "supernode_enabled": ${{ inputs.supernode_enabled }},
           "start_time": $start_time,
           "end_time": $end_time,
           "duration": $duration,
