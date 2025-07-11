@@ -7,53 +7,53 @@ inputs:
     description: 'Name for the Kurtosis enclave'
     required: false
     default: ''
-  
-  
+
+
   network:
     description: 'Network to test (any network name)'
     required: false
     default: 'hoodi'
-  
+
   el_client:
     description: 'Execution layer client (geth, nethermind, reth, besu, erigon)'
     required: false
     default: 'geth'
-  
+
   cl_client:
     description: 'Consensus layer client (lighthouse, teku, prysm, nimbus, lodestar, grandine)'
     required: false
     default: 'lighthouse'
-  
+
   cl_clients:
     description: 'Comma-separated list of CL clients for matrix testing'
     required: false
     default: ''
-  
+
   timeout:
     description: 'Timeout for the sync test job in seconds'
     required: false
     default: '7200'
-  
+
   generate_html_report:
     description: 'Whether to generate HTML report for GitHub Pages'
     required: false
     default: 'true'
-  
+
   save_to_data_branch:
     description: 'Whether to save results to data branch (requires GITHUB_TOKEN)'
     required: false
     default: 'true'
-  
+
   kurtosis_version:
     description: 'Version of Kurtosis CLI to use'
     required: false
     default: 'latest'
-  
+
   client_images:
     description: 'Custom client images as JSON mapping (e.g., {"geth":"ethereum/client-go:v1.13.0","lighthouse":"sigp/lighthouse:v4.5.0"})'
     required: false
     default: '{}'
-  
+
   supernode_enabled:
     description: 'Enable supernode functionality for participants'
     required: false
@@ -63,15 +63,15 @@ outputs:
   test_result:
     description: 'Result of the sync test (success or failure)'
     value: ${{ steps.sync-test.outputs.result }}
-  
+
   test_summary:
     description: 'Summary of test execution'
     value: ${{ steps.sync-test.outputs.summary }}
-  
+
   html_report_path:
     description: 'Path to generated HTML report'
     value: ${{ steps.generate-report.outputs.html_path }}
-  
+
   enclave_name:
     description: 'Name of the Kurtosis enclave used'
     value: ${{ steps.sync-test.outputs.enclave_name }}
@@ -81,19 +81,19 @@ runs:
   steps:
     - name: Validate inputs
       shell: bash
-      run: |        
+      run: |
         # Validate EL client
         if [[ ! "${{ inputs.el_client }}" =~ ^(geth|nethermind|reth|besu|erigon)$ ]]; then
           echo "Error: Invalid EL client '${{ inputs.el_client }}'. Must be one of: geth, nethermind, reth, besu, erigon"
           exit 1
         fi
-        
+
         # Validate CL client
         if [[ ! "${{ inputs.cl_client }}" =~ ^(lighthouse|teku|prysm|nimbus|lodestar|grandine)$ ]]; then
           echo "Error: Invalid CL client '${{ inputs.cl_client }}'. Must be one of: lighthouse, teku, prysm, nimbus, lodestar, grandine"
           exit 1
         fi
-        
+
         # Validate CL clients list if provided
         if [ -n "${{ inputs.cl_clients }}" ]; then
           IFS=',' read -ra CLIENTS <<< "${{ inputs.cl_clients }}"
@@ -114,18 +114,18 @@ runs:
           echo "Installing jq..."
           sudo apt-get update && sudo apt-get install -y jq
         fi
-        
+
         if ! command -v yq &> /dev/null; then
           echo "Installing yq..."
           sudo wget -O /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
         fi
-        
+
         if ! command -v curl &> /dev/null; then
           echo "Installing curl..."
           sudo apt-get update && sudo apt-get install -y curl
         fi
-        
+
         if ! command -v envsubst &> /dev/null; then
           echo "Installing gettext-base for envsubst..."
           sudo apt-get update && sudo apt-get install -y gettext-base
@@ -142,7 +142,7 @@ runs:
         else
           sudo apt install kurtosis-cli=${{ inputs.kurtosis_version }}
         fi
-        
+
         # Verify installation
         kurtosis version
         echo "$(dirname $(which kurtosis))" >> $GITHUB_PATH
@@ -204,7 +204,7 @@ runs:
       run: |
         # Parse client images JSON to extract custom images
         CLIENT_IMAGES='${{ inputs.client_images }}'
-        
+
         # Extract CL client image from JSON
         CL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.cl_client }}" '.[$client] // empty')
         if [ -n "$CL_IMAGE" ]; then
@@ -212,7 +212,7 @@ runs:
         else
           echo "cl_image=" >> $GITHUB_OUTPUT
         fi
-        
+
         # Extract EL client image from JSON
         EL_IMAGE=$(echo "$CLIENT_IMAGES" | jq -r --arg client "${{ inputs.el_client }}" '.[$client] // empty')
         if [ -n "$EL_IMAGE" ]; then
@@ -228,12 +228,12 @@ runs:
         # Create results directory
         mkdir -p sync-test-results
         mkdir -p logs
-        
+
         echo "Starting sync test with:"
         echo "  Network: ${{ inputs.network }}"
         echo "  EL Client: ${{ inputs.el_client }}"
         echo "  CL Client: ${{ inputs.cl_client }}"
-        
+
         # Show custom images if provided
         if [ -n "${{ steps.parse-images.outputs.cl_image }}" ] || [ -n "${{ steps.parse-images.outputs.el_image }}" ]; then
           echo "  Custom Images:"
@@ -244,10 +244,10 @@ runs:
             echo "    ${{ inputs.cl_client }}: ${{ steps.parse-images.outputs.cl_image }}"
           fi
         fi
-        
+
         echo "  Timeout: ${{ inputs.timeout }}s"
         echo
-        
+
         # Build peerdas-sync-test.sh command
         cmd="./peerdas-sync-test.sh"
         cmd="$cmd -d ${{ inputs.network }}"
@@ -255,12 +255,12 @@ runs:
         cmd="$cmd -c ${{ inputs.cl_client }}"
         cmd="$cmd -t ${{ inputs.timeout }}"
         cmd="$cmd --always-collect-logs"  # Always collect logs for GitHub Actions
-        
+
         # Add supernode parameter if enabled
         if [ "${{ inputs.supernode_enabled }}" = "true" ]; then
           cmd="$cmd --supernode"
         fi
-        
+
         # Add custom images if provided
         if [ -n "${{ steps.parse-images.outputs.cl_image }}" ]; then
           cmd="$cmd -i '${{ steps.parse-images.outputs.cl_image }}'"
@@ -268,20 +268,20 @@ runs:
         if [ -n "${{ steps.parse-images.outputs.el_image }}" ]; then
           cmd="$cmd -E '${{ steps.parse-images.outputs.el_image }}'"
         fi
-        
+
         echo "Running command: $cmd"
-        
+
         # Run the sync test and capture output
         start_time=$(date +%s)
-        
+
         # Run the command and capture both output and exit code
         # Using a different approach to avoid subshell issues with tee
         eval "$cmd" > sync-test-results/test.log 2>&1
         exit_code=$?
-        
+
         # Display the log output
         cat sync-test-results/test.log
-        
+
         # Check exit code
         if [ $exit_code -eq 0 ]; then
           test_result="success"
@@ -291,28 +291,28 @@ runs:
           echo "test_result=failure" >> $GITHUB_OUTPUT
         fi
         end_time=$(date +%s)
-        
+
         # Extract enclave name from the log output
         enclave_name=$(grep -oP 'Starting Kurtosis enclave: \K[^ ]+' sync-test-results/test.log | head -1 || echo "peerdas-sync-unknown")
         echo "enclave_name=$enclave_name" >> $GITHUB_OUTPUT
-        
+
         # Calculate duration
         duration=$((end_time - start_time))
-        
+
         # Database sizes not available from peerdas-sync-test.sh
         EL_DB_SIZE="N/A"
         CL_DB_SIZE="N/A"
-        
+
         # Create summary
         summary="Sync test completed in ${duration}s with result: $test_result"
         echo "test_summary=$summary" >> $GITHUB_OUTPUT
-        
-        # Exit with failure if test failed  
+
+        # Exit with failure if test failed
         if [ "$test_result" = "failure" ]; then
           echo "::error::Sync test failed for ${{ inputs.cl_client }}-${{ inputs.el_client }}"
           exit 1
         fi
-        
+
         # Save test metadata
         cat > sync-test-results/metadata.json << EOF
         {
@@ -342,31 +342,31 @@ runs:
       run: |
         # Create directory for organized logs
         mkdir -p enclave-dump
-        
+
         # Move logs collected by peerdas-sync-test.sh
         if [ -d logs ]; then
           echo "Found logs directory from peerdas-sync-test.sh"
           # List what we have
           echo "Contents of logs directory:"
           ls -la logs/ || true
-          
+
           # Copy all enclave logs
           echo "Copying logs to enclave-dump..."
           cp -r logs/* enclave-dump/ 2>/dev/null || true
         else
           echo "No logs directory found"
         fi
-        
+
         # Copy sync test results
         if [ -d sync-test-results ]; then
           echo "Copying sync test results..."
           cp -r sync-test-results enclave-dump/
         fi
-        
+
         # Show final structure
         echo "Final enclave-dump structure:"
         find enclave-dump -type d | head -20
-        
+
         echo "Log organization completed"
 
     - name: Cleanup Kurtosis
@@ -383,7 +383,7 @@ runs:
       run: |
         # Create reports directory
         mkdir -p reports
-        
+
         # Generate HTML report
         cat > reports/index.html << 'EOF'
         <!DOCTYPE html>
@@ -489,11 +489,11 @@ runs:
                     <div class="subtitle">Ethereum Client Synchronization Test Report</div>
                 </div>
         EOF
-        
+
         # Read metadata and generate dynamic content
         if [ -f sync-test-results/metadata.json ]; then
           metadata=$(cat sync-test-results/metadata.json)
-          
+
           # Extract values using jq
           result=$(echo "$metadata" | jq -r '.result')
           network=$(echo "$metadata" | jq -r '.network')
@@ -503,15 +503,15 @@ runs:
           enclave_name=$(echo "$metadata" | jq -r '.enclave_name')
           github_run_id=$(echo "$metadata" | jq -r '.github_run_id')
           start_time=$(echo "$metadata" | jq -r '.start_time')
-          
+
           # Convert timestamps to readable format
           start_date=$(date -d "@$start_time" 2>/dev/null || date -r "$start_time" 2>/dev/null || echo "N/A")
-          
+
           cat >> reports/index.html << EOF
                 <div style="margin-bottom: 20px;">
                     <span class="status $result">$result</span>
                 </div>
-                
+
                 <div class="grid">
                     <div class="card">
                         <h3>Test Configuration</h3>
@@ -532,7 +532,7 @@ runs:
                             <span class="metric-value">$enclave_name</span>
                         </div>
                     </div>
-                    
+
                     <div class="card">
                         <h3>Test Results</h3>
                         <div class="metric">
@@ -555,7 +555,7 @@ runs:
                 </div>
         EOF
         fi
-        
+
         # Add logs section if available
         if [ -f sync-test-results/test.log ]; then
           cat >> reports/index.html << 'EOF'
@@ -565,7 +565,7 @@ runs:
                         <pre id="logs"></pre>
                     </div>
                 </div>
-                
+
                 <script>
                     // Load and display logs
                     fetch('test.log')
@@ -578,30 +578,19 @@ runs:
                         });
                 </script>
         EOF
-          
+
           # Copy log file to reports directory
           cp sync-test-results/test.log reports/
         fi
-        
+
         cat >> reports/index.html << 'EOF'
             </div>
         </body>
         </html>
         EOF
-        
+
         echo "html_path=reports/index.html" >> $GITHUB_OUTPUT
         echo "Generated HTML report at reports/index.html"
-
-    # Note: Artifact uploads (enclave dumps, HTML reports) are handled by the calling workflow to avoid conflicts
-
-    - name: Save results to data branch
-      if: inputs.save_to_data_branch == 'true'
-      shell: bash
-      env:
-        GITHUB_TOKEN: ${{ github.token }}
-      run: |
-        # Run the save script
-        bash ${{ github.action_path }}/.github/scripts/save-test-results.sh
 
 branding:
   icon: 'sync'
