@@ -1,5 +1,0 @@
----
-- name: restart kurtosis-sync
-  systemd:
-    name: kurtosis-sync
-    state: restarted
