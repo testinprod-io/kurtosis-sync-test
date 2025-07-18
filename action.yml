@@ -3,10 +3,10 @@ description: 'Run Ethereum client synchronization tests using Kurtosis'
 author: 'ethPandaOps'
 
 inputs:
-  # enclave_name:
-  #   description: 'Name for the Kurtosis enclave'
-  #   required: false
-  #   default: ''
+  enclave_name:
+    description: 'Name for the Kurtosis enclave'
+    required: false
+    default: ''
 
 
   network:
