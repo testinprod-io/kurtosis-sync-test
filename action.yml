@@ -59,6 +59,11 @@ inputs:
     required: false
     default: 'false'
 
+  genesis_sync:
+    description: 'Perform sync from genesis'
+    required: false
+    default: 'false'
+
 outputs:
   test_result:
     description: 'Result of the sync test (success or failure)'
@@ -251,6 +256,7 @@ runs:
         # Build peerdas-sync-test.sh command
         cmd="./peerdas-sync-test.sh"
         cmd="$cmd -d ${{ inputs.network }}"
+        cmd="$cmd -D testinprod-io"
         cmd="$cmd -e ${{ inputs.el_client }}"
         cmd="$cmd -c ${{ inputs.cl_client }}"
         cmd="$cmd -t ${{ inputs.timeout }}"
@@ -259,6 +265,11 @@ runs:
         # Add supernode parameter if enabled
         if [ "${{ inputs.supernode_enabled }}" = "true" ]; then
           cmd="$cmd --supernode"
+        fi
+
+        # Add genesis_sync parameter if enabled
+        if [ "${{ inputs.genesis_sync }}" = "true" ]; then
+          cmd="$cmd --genesis-sync"
         fi
 
         # Add custom images if provided
@@ -323,6 +334,7 @@ runs:
           "client_images": ${{ inputs.client_images }},
           "timeout": ${{ inputs.timeout }},
           "supernode_enabled": ${{ inputs.supernode_enabled }},
+          "genesis_sync": ${{ inputs.genesis_sync }},
           "start_time": $start_time,
           "end_time": $end_time,
           "duration": $duration,

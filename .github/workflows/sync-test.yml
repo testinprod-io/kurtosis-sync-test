@@ -70,10 +70,15 @@ on:
         type: boolean
         default: false
 
+      genesis_sync:
+        description: 'Perform a sync test from genesis'
+        required: false
+        type: boolean
+        default: false
 
-  schedule:
-    # Run daily at 2:00 AM UTC
-    - cron: '0 2 * * *'
+  # schedule:
+  #   # Run daily at 2:00 AM UTC
+  #   - cron: '0 2 * * *'
 
 # Allow only one concurrent deployment, skipping runs queued between the one in-progress and latest queued.
 concurrency:
@@ -239,6 +244,7 @@ jobs:
           save_to_data_branch: 'true'
           client_images: ${{ github.event.inputs.client_images || '{}' }}
           supernode_enabled: ${{ github.event.inputs.supernode_enabled || 'false' }}
+          genesis_sync: ${{ github.event.inputs.genesis_sync || 'false' }}
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
