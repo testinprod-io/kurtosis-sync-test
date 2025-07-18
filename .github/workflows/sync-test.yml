@@ -39,10 +39,10 @@ on:
         type: number
         default: 120
 
-      enclave_name:
-        description: 'Custom enclave name (optional)'
-        required: false
-        type: string
+      # enclave_name:
+      #   description: 'Custom enclave name (optional)'
+      #   required: false
+      #   type: string
 
       matrix_mode:
         description: 'Run as matrix (all combinations) or single test'
@@ -239,7 +239,7 @@ jobs:
           el_client: ${{ matrix.el_client }}
           cl_client: ${{ matrix.cl_client }}
           timeout: ${{ steps.calc-timeout.outputs.timeout_seconds }}
-          enclave_name: ${{ github.event.inputs.enclave_name || format('sync-{0}-{1}-{2}-{3}', needs.setup-matrix.outputs.network, matrix.el_client, matrix.cl_client, github.run_number) }}
+          enclave_name: ${{ format('sync-{0}-{1}-{2}-{3}', needs.setup-matrix.outputs.network, matrix.el_client, matrix.cl_client, github.run_number) }}
           generate_html_report: 'false'
           save_to_data_branch: 'true'
           client_images: ${{ github.event.inputs.client_images || '{}' }}
